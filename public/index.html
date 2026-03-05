@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoPro Telemetry Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+    (function() {
+        // Custom Chart.js plugin for vertical cursor
+        var verticalCursorPlugin = {
+            id: 'verticalCursor',
+            afterDraw: function(chart) {
+                if (typeof state === 'undefined' || state.currentTime === undefined || state.currentTime === null) return;
+                
+                var ctx = chart.ctx;
+                var xAxis = chart.scales.x;
+                var yAxis = chart.scales.y;
+                
+                var x = xAxis.getPixelForValue(state.currentTime);
+                if (x < xAxis.left || x > xAxis.right) return;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, yAxis.top);
+                ctx.lineTo(x, yAxis.bottom);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ff0000';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        // Register custom plugin globally
+        Chart.register(verticalCursorPlugin);
+
+        var state = {
+            telemetry: null,
+            videoUrl: null,
+            isProcessing: false,
+            error: null,
+            sfPoint: null,
+            sfMarker: null,
+            lapResults: null,
+            map: null,
+            speedChart: null,
+            gforceChart: null,
+            updateInterval: null,
+            currentTime: null
+        };
+
+        // Lap Detection
+        function detectLaps(gpsData, sfPoint, options) {
+            options = options || {};
+            var radius = options.radius || 15;
+            var cooldown = options.cooldown || 10;
+
+            if (!gpsData || gpsData.length === 0) return { laps: [], bestLap: null, direction: null };
+            if (!sfPoint || sfPoint.lat == null || sfPoint.lon == null) return { laps: [], bestLap: null, direction: null, error: 'No S/F point' };
+
+            var crossings = [];
+            for (var i = 0; i < gpsData.length; i++) {
+                var pt = gpsData[i];
+                var dist = haversineDistance(sfPoint.lat, sfPoint.lon, pt.lat, pt.lon);
+                if (dist <= radius) {
+                    var bearing = 0;
+                    if (i > 0) bearing = calculateBearing(gpsData[i-1].lat, gpsData[i-1].lon, pt.lat, pt.lon);
+                    crossings.push({ time: pt.t, bearing: bearing });
+                }
+            }
+
+            if (crossings.length < 2) return { laps: [], bestLap: null, direction: null, error: 'No crossings' };
+
+            var bearingChanges = 0;
+            for (var i = 1; i < Math.min(crossings.length, 10); i++) {
+                var diff = crossings[i].bearing - crossings[i-1].bearing;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+                bearingChanges += diff;
+            }
+
+            var direction = bearingChanges > 0 ? 'clockwise' : 'counter-clockwise';
+            var laps = [];
+            var lapStart = null;
+
+            for (var i = 0; i < crossings.length; i++) {
+                var isFirst = i === 0;
+                var bearingChange = 0;
+                if (i > 0) {
+                    bearingChange = crossings[i].bearing - crossings[i-1].bearing;
+                    while (bearingChange > 180) bearingChange -= 360;
+                    while (bearingChange < -180) bearingChange += 360;
+                }
+
+                var validDir = direction === 'clockwise' ? bearingChange >= 0 : bearingChange <= 0;
+
+                if (isFirst || validDir) {
+                    if (lapStart === null) {
+                        lapStart = crossings[i].time;
+                    } else {
+                        var dur = crossings[i].time - lapStart;
+                        if (dur > cooldown) {
+                            laps.push({ lap: laps.length + 1, startTime: lapStart, endTime: crossings[i].time, duration: dur });
+                            lapStart = crossings[i].time;
+                        }
+                    }
+                }
+            }
+
+            var bestLap = null;
+            if (laps.length > 0) {
+                bestLap = Math.min.apply(null, laps.map(function(l) { return l.duration; }));
+                laps.forEach(function(l) { l.delta = l.duration - bestLap; });
+            }
+
+            return { laps: laps, bestLap: bestLap, direction: direction };
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var phi1 = lat1 * Math.PI / 180;
+            var phi2 = lat2 * Math.PI / 180;
+            var dPhi = (lat2 - lat1) * Math.PI / 180;
+            var dLam = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dPhi/2) * Math.sin(dPhi/2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam/2) * Math.sin(dLam/2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            var phi1 = lat1 * Math.PI / 180;
+            var phi2 = lat2 * Math.PI / 180;
+            var dLam = (lon2 - lon1) * Math.PI / 180;
+            var x = Math.sin(dLam) * Math.cos(phi2);
+            var y = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLam);
+            var brg = Math.atan2(x, y) * 180 / Math.PI;
+            return (brg + 360) % 360;
+        }
+
+        // Render
+        function render() {
+            var app = document.getElementById('app');
+            var html = '';
+
+            if (!state.telemetry && !state.isProcessing) {
+                html = renderUpload();
+            } else if (state.isProcessing) {
+                html = renderProcessing();
+            } else if (state.error) {
+                html = renderError();
+            } else {
+                html = renderDashboard();
+            }
+
+            app.innerHTML = html;
+            attachEvents();
+        }
+
+        function renderUpload() {
+            return '<div class="min-h-screen bg-slate-50">' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
+                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
+                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '</header>' +
+                '<main class="max-w-7xl mx-auto p-6">' +
+                '<div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-dashed border-slate-300 hover:border-blue-500 transition-colors">' +
+                '<input type="file" accept=".mp4" id="file-input" class="hidden">' +
+                '<label for="file-input" class="cursor-pointer">' +
+                '<div class="text-6xl mb-4">📹</div>' +
+                '<p class="text-xl text-slate-700 mb-2">Drop your GoPro MP4 file here</p>' +
+                '<p class="text-slate-500">or click to browse</p>' +
+                '</label></div></main></div>';
+        }
+
+        function renderProcessing() {
+            return '<div class="min-h-screen bg-slate-50">' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
+                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
+                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '</header>' +
+                '<main class="max-w-7xl mx-auto p-6">' +
+                '<div class="bg-white rounded-lg shadow-md p-12 text-center">' +
+                '<div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>' +
+                '<p class="text-lg text-slate-600">Extracting telemetry data...</p></div></main></div>';
+        }
+
+        function renderError() {
+            return '<div class="min-h-screen bg-slate-50">' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg"><h1>Error</h1></header>' +
+                '<main class="p-6"><div class="bg-red-50 text-red-700 p-4 rounded">' + state.error + '</div></main></div>';
+        }
+
+        function renderDashboard() {
+            var t = state.telemetry;
+
+            var html = '<div class="min-h-screen bg-slate-50">' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
+                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
+                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '</header><main class="max-w-7xl mx-auto p-6 space-y-6">';
+
+            // Video
+            html += '<div class="bg-white rounded-lg shadow-md p-4">' +
+                '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
+                '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
+                '<div class="flex justify-center gap-6 py-2 px-4 bg-slate-100 rounded-lg mt-3">' +
+                '<div class="flex items-center gap-2"><span class="text-2xl">📍</span><span id="speed-display" class="font-bold text-lg">0 km/h</span></div>' +
+                '<div class="flex items-center gap-2 text-green-600"><span class="font-bold">LONG</span><span id="gy-display" class="font-bold text-lg">0.00</span><span class="text-xs">G</span></div>' +
+                '<div class="flex items-center gap-2 text-red-600"><span class="font-bold">LAT</span><span id="gx-display" class="font-bold text-lg">0.00</span><span class="text-xs">G</span></div>' +
+                '<div class="flex items-center gap-2"><span class="text-2xl">🏔️</span><span id="alt-display" class="font-bold text-lg">0m</span></div>' +
+                '</div></div>';
+
+            // Stats
+            html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4">' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + t.maxGForce.toFixed(2) + 'G</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + t.totalDistance.toFixed(2) + ' km</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + t.duration.toFixed(0) + 's</p></div>' +
+                '</div>';
+
+            // Speed Chart
+            html += '<div class="bg-white rounded-lg shadow p-4"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><canvas id="speed-chart" class="w-full" style="height:256px"></canvas></div>';
+
+            // G-Force Chart
+            html += '<div class="bg-white rounded-lg shadow p-4"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><canvas id="gforce-chart" class="w-full" style="height:256px"></canvas></div>';
+
+            // Map
+            html += '<div class="bg-white rounded-lg shadow p-4">' +
+                '<div class="flex justify-between items-center mb-3">' +
+                '<h2 class="text-lg font-semibold">Track Map</h2>' +
+                '<button id="sf-btn" class="px-4 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700">Set S/F Line</button>' +
+                '</div>' +
+                '<div id="map" class="h-96 rounded-lg"></div></div>';
+
+            html += '<div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + t.gpsPoints + '</strong> telemetry points</p></div>';
+            html += '</main></div>';
+
+            return html;
+        }
+
+        // Events
+        function attachEvents() {
+            // File input
+            var fileInput = document.getElementById('file-input');
+            if (fileInput) {
+                fileInput.addEventListener('change', handleFileUpload);
+            }
+
+            // S/F button
+            var sfBtn = document.getElementById('sf-btn');
+            if (sfBtn) {
+                sfBtn.addEventListener('click', toggleSfMode);
+            }
+
+            // Wait for DOM to settle then init
+            setTimeout(function() {
+                initMap();
+                initCharts();
+                startTelemetryUpdate();
+            }, 50);
+        }
+
+        function handleFileUpload(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+
+            state.isProcessing = true;
+            state.error = null;
+            state.telemetry = null;
+            state.videoUrl = URL.createObjectURL(file);
+            state.sfPoint = null;
+            state.lapResults = null;
+            render();
+
+            var fd = new FormData();
+            fd.append('video', file);
+
+            fetch('http://localhost:3001/api/extract', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    state.telemetry = data;
+                })
+                .catch(function(err) {
+                    state.error = err.message;
+                })
+                .finally(function() {
+                    state.isProcessing = false;
+                    render();
+                });
+        }
+
+        function toggleSfMode() {
+            console.log('toggleSfMode called, current sfPoint:', state.sfPoint);
+            if (!state.sfPoint) {
+                state.sfPoint = { __placing: true };
+            } else if (state.sfPoint.__placing) {
+                state.sfPoint = null;
+            } else {
+                state.sfPoint = { __placing: true };
+                state.lapResults = null;
+            }
+            console.log('After toggle, sfPoint:', state.sfPoint);
+            updateSfButton();
+        }
+
+        function updateSfButton() {
+            var btn = document.getElementById('sf-btn');
+            if (!btn) return;
+            
+            var btnClass = 'px-4 py-2 rounded-lg text-white ';
+            if (state.sfPoint && state.sfPoint.__placing) {
+                btnClass += 'bg-yellow-500 hover:bg-yellow-600';
+                btn.textContent = 'Click on map';
+            } else if (state.sfPoint && state.sfPoint.lat) {
+                btnClass += 'bg-green-600 hover:bg-green-700';
+                btn.textContent = 'Move S/F Line';
+            } else {
+                btnClass += 'bg-green-600 hover:bg-green-700';
+                btn.textContent = 'Set S/F Line';
+            }
+            btn.className = btnClass;
+        }
+        
+        function initMap() {
+            var mapEl = document.getElementById('map');
+            if (!mapEl || !state.telemetry) return;
+            
+            // If map exists but container changed, clean up
+            if (state.map) {
+                try {
+                    state.map.remove();
+                } catch(e) {}
+                state.map = null;
+            }
+            
+            var data = state.telemetry.data;
+            var lats = data.map(function(d) { return d.lat; });
+            var lons = data.map(function(d) { return d.lon; });
+            var center = [(Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2, 
+                         (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2];
+
+            state.map = L.map('map').setView(center, 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(state.map);
+
+            var positions = data.map(function(d) { return [d.lat, d.lon]; });
+            L.polyline(positions, { color: '#2563eb', weight: 3 }).addTo(state.map);
+
+            state.map.on('click', function(e) {
+                console.log('Map clicked!', state.sfPoint);
+                // Only place marker if in placement mode
+                if (!state.sfPoint || !state.sfPoint.__placing) return;
+                
+                // Remove previous marker if exists
+                if (state.sfMarker) {
+                    state.map.removeLayer(state.sfMarker);
+                }
+                
+                // Leaflet uses lng, GPS data uses lon
+                state.sfPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
+                state.sfMarker = L.circleMarker([state.sfPoint.lat, state.sfPoint.lon], {
+                    radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
+                }).addTo(state.map);
+                
+                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10 });
+                
+                updateSfButton();
+                updateLapResults();
+            });
+        }
+
+        function updateLapResults() {
+            var lr = state.lapResults;
+            var existing = document.getElementById('lap-results');
+            if (existing) existing.remove();
+            
+            if (!lr || !lr.laps || lr.laps.length === 0) return;
+            
+            var html = '<div id="lap-results" class="bg-white rounded-lg shadow p-4">' +
+                '<h2 class="text-lg font-semibold mb-3">Lap Times</h2>' +
+                '<p class="text-sm text-slate-500 mb-2">Direction: ' + lr.direction + ' | Best: ' + lr.bestLap.toFixed(2) + 's</p>' +
+                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th><th class="py-2">Delta</th></tr></thead><tbody>';
+            for (var i = 0; i < lr.laps.length; i++) {
+                var lap = lr.laps[i];
+                var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
+                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(2) + 's</td><td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(2) + 's</td></tr>';
+            }
+            html += '</tbody></table></div>';
+            
+            var mapDiv = document.getElementById('map');
+            if (mapDiv && mapDiv.parentElement) {
+                mapDiv.parentElement.parentElement.insertAdjacentHTML('beforeend', html);
+            }
+        }
+
+        function initCharts() {
+            if (!state.telemetry || !state.telemetry.data) return;
+
+            var data = state.telemetry.data;
+
+            // Speed
+            var speedCtx = document.getElementById('speed-chart');
+            if (speedCtx && speedCtx.parentElement) {
+                var maxSpeed = Math.max.apply(null, data.map(function(d) { return d.speed; }));
+                var speedMax = Math.ceil(maxSpeed / 10) * 10 + 10;
+                var duration = state.telemetry.duration;
+                
+                if (state.speedChart) state.speedChart.destroy();
+                
+                // Use scatter format for proper axis control
+                var speedData = data.map(function(d) { return {x: d.t, y: d.speed}; });
+                
+                state.speedChart = new Chart(speedCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Speed',
+                            data: speedData,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37,99,235,0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        animation: false,
+                        parsing: false,
+                        normalized: true,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { 
+                                type: 'linear',
+                                min: 0,
+                                max: duration,
+                                title: { display: true, text: 'Time (s)' }
+                            },
+                            y: { 
+                                min: 0,
+                                max: speedMax,
+                                title: { display: true, text: 'km/h' }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            }
+
+            // G-Force
+            var gCtx = document.getElementById('gforce-chart');
+            if (gCtx && gCtx.parentElement) {
+                var allGx = data.map(function(d) { return Math.abs(d.gz); });
+                var allGy = data.map(function(d) { return Math.abs(d.gy); });
+                var maxG = Math.max(Math.max.apply(null, allGx), Math.max.apply(null, allGy));
+                var gBound = Math.max(1, Math.ceil(maxG));
+                var duration = state.telemetry.duration;
+
+                if (state.gforceChart) state.gforceChart.destroy();
+                
+                state.gforceChart = new Chart(gCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            { label: 'Longitudinal', data: data.map(function(d) { return {x: d.t, y: d.gy}; }), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+                            { label: 'Lateral', data: data.map(function(d) { return {x: d.t, y: d.gz}; }), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0, tension: 0.3 }
+                        ]
+                    },
+                    options: {
+                        animation: false,
+                        parsing: false,
+                        normalized: true,
+                        plugins: {
+                            legend: { display: true }
+                        },
+                        scales: {
+                            x: { 
+                                type: 'linear',
+                                min: 0,
+                                max: duration,
+                                title: { display: true, text: 'Time (s)' }
+                            },
+                            y: { 
+                                min: -gBound,
+                                max: gBound,
+                                title: { display: true, text: 'G' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function startTelemetryUpdate() {
+            if (state.updateInterval) clearInterval(state.updateInterval);
+            state.updateInterval = setInterval(function() {
+                var video = document.getElementById('video-player');
+                if (!video || !state.telemetry || !state.telemetry.data) return;
+
+                var ct = video.currentTime;
+                state.currentTime = ct;
+                
+                var data = state.telemetry.data;
+                var closest = data[0];
+                var minDiff = Math.abs(closest.t - ct);
+
+                for (var i = 0; i < data.length; i++) {
+                    var diff = Math.abs(data[i].t - ct);
+                    if (diff < minDiff) { minDiff = diff; closest = data[i]; }
+                }
+
+                var speedEl = document.getElementById('speed-display');
+                var gxEl = document.getElementById('gx-display');
+                var gyEl = document.getElementById('gy-display');
+                var altEl = document.getElementById('alt-display');
+
+                if (speedEl) speedEl.textContent = closest.speed.toFixed(1) + ' km/h';
+                if (gxEl) gxEl.textContent = closest.gz.toFixed(2);
+                if (gyEl) gyEl.textContent = closest.gy.toFixed(2);
+                if (altEl) altEl.textContent = closest.alt.toFixed(0) + 'm';
+
+                if (state.speedChart) state.speedChart.update('none');
+                if (state.gforceChart) state.gforceChart.update('none');
+            }, 100);
+        }
+
+        // Start
+        render();
+    })();
+    </script>
+</body>
+</html>

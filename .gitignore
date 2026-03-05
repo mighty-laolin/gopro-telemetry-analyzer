@@ -1,0 +1,10 @@
+node_modules/
+uploads/
+.DS_Store
+.vite/
+*.log
+.opencode/
+*.spec.ts
+PRD.html
+PRD.md
+opencode.json
