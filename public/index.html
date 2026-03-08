@@ -50,6 +50,7 @@
             sfPoint: null,
             sfMarker: null,
             lapResults: null,
+            directionOverride: null,
             map: null,
             speedChart: null,
             gforceChart: null,
@@ -62,6 +63,7 @@
             options = options || {};
             var radius = options.radius || 15;
             var cooldown = options.cooldown || 10;
+            var directionOverride = options.direction || null;
 
             if (!gpsData || gpsData.length === 0) return { laps: [], bestLap: null, direction: null };
             if (!sfPoint || sfPoint.lat == null || sfPoint.lon == null) return { laps: [], bestLap: null, direction: null, error: 'No S/F point' };
@@ -79,15 +81,19 @@
 
             if (crossings.length < 2) return { laps: [], bestLap: null, direction: null, error: 'No crossings' };
 
-            var bearingChanges = 0;
-            for (var i = 1; i < Math.min(crossings.length, 10); i++) {
-                var diff = crossings[i].bearing - crossings[i-1].bearing;
-                while (diff > 180) diff -= 360;
-                while (diff < -180) diff += 360;
-                bearingChanges += diff;
+            var direction;
+            if (directionOverride) {
+                direction = directionOverride;
+            } else {
+                var bearingChanges = 0;
+                for (var i = 1; i < Math.min(crossings.length, 10); i++) {
+                    var diff = crossings[i].bearing - crossings[i-1].bearing;
+                    while (diff > 180) diff -= 360;
+                    while (diff < -180) diff += 360;
+                    bearingChanges += diff;
+                }
+                direction = bearingChanges > 0 ? 'clockwise' : 'counter-clockwise';
             }
-
-            var direction = bearingChanges > 0 ? 'clockwise' : 'counter-clockwise';
             var laps = [];
             var lapStart = null;
 
@@ -366,13 +372,16 @@
                     state.map.removeLayer(state.sfMarker);
                 }
                 
+                // Reset direction override when placing new S/F point
+                state.directionOverride = null;
+                
                 // Leaflet uses lng, GPS data uses lon
                 state.sfPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
                 state.sfMarker = L.circleMarker([state.sfPoint.lat, state.sfPoint.lon], {
                     radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
                 }).addTo(state.map);
                 
-                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10 });
+                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10, direction: state.directionOverride });
                 
                 updateSfButton();
                 updateLapResults();
@@ -386,14 +395,20 @@
             
             if (!lr || !lr.laps || lr.laps.length === 0) return;
             
+            var dirBtnText = 'Swap direction';
+            var displayDir = state.directionOverride || lr.direction;
+            
             var html = '<div id="lap-results" class="bg-white rounded-lg shadow p-4">' +
-                '<h2 class="text-lg font-semibold mb-3">Lap Times</h2>' +
-                '<p class="text-sm text-slate-500 mb-2">Direction: ' + lr.direction + ' | Best: ' + lr.bestLap.toFixed(2) + 's</p>' +
+                '<div class="flex justify-between items-center mb-3">' +
+                '<h2 class="text-lg font-semibold">Lap Times</h2>' +
+                '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">' + dirBtnText + '</button>' +
+                '</div>' +
+                '<p class="text-sm text-slate-500 mb-2">Direction: ' + displayDir + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
                 '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th><th class="py-2">Delta</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
-                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(2) + 's</td><td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(2) + 's</td></tr>';
+                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td><td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td></tr>';
             }
             html += '</tbody></table></div>';
             
@@ -401,6 +416,26 @@
             if (mapDiv && mapDiv.parentElement) {
                 mapDiv.parentElement.parentElement.insertAdjacentHTML('beforeend', html);
             }
+            
+            var dirBtn = document.getElementById('dir-toggle-btn');
+            if (dirBtn) {
+                dirBtn.addEventListener('click', toggleDirection);
+            }
+        }
+
+        function toggleDirection() {
+            if (state.directionOverride) {
+                state.directionOverride = null;
+            } else {
+                var currentDir = state.lapResults.direction;
+                state.directionOverride = currentDir === 'clockwise' ? 'counter-clockwise' : 'clockwise';
+            }
+            
+            if (state.sfPoint && state.sfPoint.lat) {
+                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10, direction: state.directionOverride });
+            }
+            
+            updateLapResults();
         }
 
         function initCharts() {

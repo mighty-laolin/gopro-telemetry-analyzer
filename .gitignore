@@ -3,6 +3,8 @@ uploads/
 .DS_Store
 .vite/
 *.log
+*.MP4
+*.mp4
 .opencode/
 *.spec.ts
 PRD.html
