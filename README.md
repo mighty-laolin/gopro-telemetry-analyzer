@@ -19,7 +19,11 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 
 ## Installation
 
-1. Clone the repository
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mighty-laolin/gopro-telemetry-analyzer.git
+   cd gopro-telemetry-analyzer
+   ```
 2. Install Node.js dependencies:
    ```bash
    npm install
