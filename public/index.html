@@ -8,6 +8,11 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script type="module">
+        import { detectLaps, calculateLineLength } from './lapDetector.js';
+        window.detectLaps = detectLaps;
+        window.calculateLineLength = calculateLineLength;
+    </script>
 </head>
 <body>
     <div id="app"></div>
@@ -47,8 +52,9 @@
             videoUrl: null,
             isProcessing: false,
             error: null,
-            sfPoint: null,
-            sfMarker: null,
+            sfLine: null,
+            sfLineLayer: null,
+            sfMarkers: [],
             lapResults: null,
             directionOverride: null,
             map: null,
@@ -57,99 +63,6 @@
             updateInterval: null,
             currentTime: null
         };
-
-        // Lap Detection
-        function detectLaps(gpsData, sfPoint, options) {
-            options = options || {};
-            var radius = options.radius || 15;
-            var cooldown = options.cooldown || 10;
-            var directionOverride = options.direction || null;
-
-            if (!gpsData || gpsData.length === 0) return { laps: [], bestLap: null, direction: null };
-            if (!sfPoint || sfPoint.lat == null || sfPoint.lon == null) return { laps: [], bestLap: null, direction: null, error: 'No S/F point' };
-
-            var crossings = [];
-            for (var i = 0; i < gpsData.length; i++) {
-                var pt = gpsData[i];
-                var dist = haversineDistance(sfPoint.lat, sfPoint.lon, pt.lat, pt.lon);
-                if (dist <= radius) {
-                    var bearing = 0;
-                    if (i > 0) bearing = calculateBearing(gpsData[i-1].lat, gpsData[i-1].lon, pt.lat, pt.lon);
-                    crossings.push({ time: pt.t, bearing: bearing });
-                }
-            }
-
-            if (crossings.length < 2) return { laps: [], bestLap: null, direction: null, error: 'No crossings' };
-
-            var direction;
-            if (directionOverride) {
-                direction = directionOverride;
-            } else {
-                var bearingChanges = 0;
-                for (var i = 1; i < Math.min(crossings.length, 10); i++) {
-                    var diff = crossings[i].bearing - crossings[i-1].bearing;
-                    while (diff > 180) diff -= 360;
-                    while (diff < -180) diff += 360;
-                    bearingChanges += diff;
-                }
-                direction = bearingChanges > 0 ? 'clockwise' : 'counter-clockwise';
-            }
-            var laps = [];
-            var lapStart = null;
-
-            for (var i = 0; i < crossings.length; i++) {
-                var isFirst = i === 0;
-                var bearingChange = 0;
-                if (i > 0) {
-                    bearingChange = crossings[i].bearing - crossings[i-1].bearing;
-                    while (bearingChange > 180) bearingChange -= 360;
-                    while (bearingChange < -180) bearingChange += 360;
-                }
-
-                var validDir = direction === 'clockwise' ? bearingChange >= 0 : bearingChange <= 0;
-
-                if (isFirst || validDir) {
-                    if (lapStart === null) {
-                        lapStart = crossings[i].time;
-                    } else {
-                        var dur = crossings[i].time - lapStart;
-                        if (dur > cooldown) {
-                            laps.push({ lap: laps.length + 1, startTime: lapStart, endTime: crossings[i].time, duration: dur });
-                            lapStart = crossings[i].time;
-                        }
-                    }
-                }
-            }
-
-            var bestLap = null;
-            if (laps.length > 0) {
-                bestLap = Math.min.apply(null, laps.map(function(l) { return l.duration; }));
-                laps.forEach(function(l) { l.delta = l.duration - bestLap; });
-            }
-
-            return { laps: laps, bestLap: bestLap, direction: direction };
-        }
-
-        function haversineDistance(lat1, lon1, lat2, lon2) {
-            var R = 6371000;
-            var phi1 = lat1 * Math.PI / 180;
-            var phi2 = lat2 * Math.PI / 180;
-            var dPhi = (lat2 - lat1) * Math.PI / 180;
-            var dLam = (lon2 - lon1) * Math.PI / 180;
-            var a = Math.sin(dPhi/2) * Math.sin(dPhi/2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam/2) * Math.sin(dLam/2);
-            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-
-        function calculateBearing(lat1, lon1, lat2, lon2) {
-            var phi1 = lat1 * Math.PI / 180;
-            var phi2 = lat2 * Math.PI / 180;
-            var dLam = (lon2 - lon1) * Math.PI / 180;
-            var x = Math.sin(dLam) * Math.cos(phi2);
-            var y = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLam);
-            var brg = Math.atan2(x, y) * 180 / Math.PI;
-            return (brg + 360) % 360;
-        }
 
         // Render
         function render() {
@@ -283,7 +196,7 @@
             state.error = null;
             state.telemetry = null;
             state.videoUrl = URL.createObjectURL(file);
-            state.sfPoint = null;
+            state.sfLine = null;
             state.lapResults = null;
             render();
 
@@ -305,17 +218,34 @@
         }
 
         function toggleSfMode() {
-            console.log('toggleSfMode called, current sfPoint:', state.sfPoint);
-            if (!state.sfPoint) {
-                state.sfPoint = { __placing: true };
-            } else if (state.sfPoint.__placing) {
-                state.sfPoint = null;
+            if (!state.sfLine) {
+                state.sfLine = { __placing: 'first' };
+                state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                state.sfMarkers = [];
+                if (state.sfLineLayer) {
+                    state.map.removeLayer(state.sfLineLayer);
+                    state.sfLineLayer = null;
+                }
+            } else if (state.sfLine.__placing) {
+                state.sfLine = null;
+                state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                state.sfMarkers = [];
+                if (state.sfLineLayer) {
+                    state.map.removeLayer(state.sfLineLayer);
+                    state.sfLineLayer = null;
+                }
             } else {
-                state.sfPoint = { __placing: true };
+                state.sfLine = { __placing: 'first' };
+                state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                state.sfMarkers = [];
+                if (state.sfLineLayer) {
+                    state.map.removeLayer(state.sfLineLayer);
+                    state.sfLineLayer = null;
+                }
                 state.lapResults = null;
             }
-            console.log('After toggle, sfPoint:', state.sfPoint);
             updateSfButton();
+            updateLapResults();
         }
 
         function updateSfButton() {
@@ -323,10 +253,13 @@
             if (!btn) return;
             
             var btnClass = 'px-4 py-2 rounded-lg text-white ';
-            if (state.sfPoint && state.sfPoint.__placing) {
+            if (state.sfLine && state.sfLine.__placing === 'first') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
-                btn.textContent = 'Click on map';
-            } else if (state.sfPoint && state.sfPoint.lat) {
+                btn.textContent = 'Click 1st point';
+            } else if (state.sfLine && state.sfLine.__placing === 'second') {
+                btnClass += 'bg-yellow-500 hover:bg-yellow-600';
+                btn.textContent = 'Click 2nd point';
+            } else if (state.sfLine && state.sfLine.start && state.sfLine.end) {
                 btnClass += 'bg-green-600 hover:bg-green-700';
                 btn.textContent = 'Move S/F Line';
             } else {
@@ -363,28 +296,75 @@
             L.polyline(positions, { color: '#2563eb', weight: 3 }).addTo(state.map);
 
             state.map.on('click', function(e) {
-                console.log('Map clicked!', state.sfPoint);
-                // Only place marker if in placement mode
-                if (!state.sfPoint || !state.sfPoint.__placing) return;
+                if (!state.sfLine || !state.sfLine.__placing) return;
                 
-                // Remove previous marker if exists
-                if (state.sfMarker) {
-                    state.map.removeLayer(state.sfMarker);
+                var clickPos = { lat: e.latlng.lat, lon: e.latlng.lng };
+                
+                if (state.sfLine.__placing === 'first') {
+                    state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                    state.sfMarkers = [];
+                    if (state.sfLineLayer) {
+                        state.map.removeLayer(state.sfLineLayer);
+                        state.sfLineLayer = null;
+                    }
+                    
+                    state.sfLine.start = clickPos;
+                    state.sfLine.__placing = 'second';
+                    
+                    var marker = L.circleMarker([clickPos.lat, clickPos.lon], {
+                        radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
+                    }).addTo(state.map);
+                    state.sfMarkers.push(marker);
+                    
+                    updateSfButton();
+                } else if (state.sfLine.__placing === 'second') {
+                    state.sfLine.end = clickPos;
+                    
+                    var dlat = state.sfLine.end.lat - state.sfLine.start.lat;
+                    var dlon = state.sfLine.end.lon - state.sfLine.start.lon;
+                    var midLat = (state.sfLine.start.lat + state.sfLine.end.lat) / 2;
+                    var metersPerDegLon = 111320 * Math.cos(midLat * Math.PI / 180);
+                    var metersPerDegLat = 111320;
+                    var lineLength = Math.sqrt(
+                        Math.pow(dlat * metersPerDegLat, 2) +
+                        Math.pow(dlon * metersPerDegLon, 2)
+                    );
+                    
+                    console.log('Line length:', lineLength, 'meters');
+                    
+                    if (lineLength > 20) {
+                        alert('S/F line cannot be longer than 20 meters. Please set a shorter line.');
+                        state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                        state.sfMarkers = [];
+                        state.sfLine = { __placing: 'first' };
+                        updateSfButton();
+                        return;
+                    }
+                    
+                    state.sfLine.__placing = null;
+                    
+                    var marker2 = L.circleMarker([clickPos.lat, clickPos.lon], {
+                        radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
+                    }).addTo(state.map);
+                    state.sfMarkers.push(marker2);
+                    
+                    state.sfLineLayer = L.polyline([
+                        [state.sfLine.start.lat, state.sfLine.start.lon],
+                        [state.sfLine.end.lat, state.sfLine.end.lon]
+                    ], { color: '#22c55e', weight: 4, opacity: 1 }).addTo(state.map);
+                    
+                    state.directionOverride = null;
+                    console.log('Calling detectLaps with sfLine:', state.sfLine);
+                    try {
+                        state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
+                        console.log('detectLaps returned:', state.lapResults);
+                    } catch (e) {
+                        console.error('detectLaps error:', e);
+                    }
+                    
+                    updateSfButton();
+                    updateLapResults();
                 }
-                
-                // Reset direction override when placing new S/F point
-                state.directionOverride = null;
-                
-                // Leaflet uses lng, GPS data uses lon
-                state.sfPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
-                state.sfMarker = L.circleMarker([state.sfPoint.lat, state.sfPoint.lon], {
-                    radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
-                }).addTo(state.map);
-                
-                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10, direction: state.directionOverride });
-                
-                updateSfButton();
-                updateLapResults();
             });
         }
 
@@ -431,8 +411,8 @@
                 state.directionOverride = currentDir === 'clockwise' ? 'counter-clockwise' : 'clockwise';
             }
             
-            if (state.sfPoint && state.sfPoint.lat) {
-                state.lapResults = detectLaps(state.telemetry.data, state.sfPoint, { radius: 15, cooldown: 10, direction: state.directionOverride });
+            if (state.sfLine && state.sfLine.start && state.sfLine.end) {
+                state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
             }
             
             updateLapResults();
