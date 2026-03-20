@@ -52,13 +52,15 @@ http://localhost:3001
 
 3. **Set Start/Finish Line**:
    - Click the green "Set S/F Line" button next to the map
-   - The button turns yellow - "Click on map"
-   - Click on the map where you want the start/finish line
+   - The button turns yellow - "Click 1st point"
+   - Click on the map where you want the first point
+   - The button turns yellow - "Click 2nd point"
+   - Click on the map for the second point (within 20m of first point)
    - Lap times will appear below the map
 
 4. **Move S/F Line**:
    - Click "Move S/F Line" to reposition
-   - Previous marker is automatically removed
+   - Previous line is automatically removed
 
 5. **Play Video**: The vertical cursor on charts moves in sync with video playback
 
@@ -85,6 +87,6 @@ http://localhost:3001
 ## Notes
 
 - Maximum video duration: ~30 minutes (20,000 GPS points, 400,000 accelerometer points)
-- Lap detection uses 15m radius around S/F point
-- Direction (clockwise/counter-clockwise) is auto-detected
+- Lap detection uses 20m S/F line with GPS track crossing detection
+- Direction detection disabled (not reliable)
 - G-force display: gy = longitudinal (green), gz = lateral (red)

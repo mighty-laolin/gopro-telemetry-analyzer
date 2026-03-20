@@ -170,86 +170,37 @@ export function detectLaps(gpsData, sfLine, options = {}) {
         return { laps: [], bestLap: null, direction: null, error: 'No crossings detected' };
     }
     
-    // Step 2: Determine direction from u value changes between crossings
-    // u increases = "forward" along S/F line, u decreases = "backward"
-    // Overall direction is determined by whether forward or backward is more common
-    let direction = null;
-    let forwardCount = 0;
-    let backwardCount = 0;
+    // Direction detection removed - was unreliable due to S/F line orientation
+    // and track position affecting uDiff sign
+    const direction = null;
     
-    console.log('Direction analysis (u values):');
-    for (let i = 1; i < Math.min(crossings.length, 15); i++) {
-        const uDiff = crossings[i].u - crossings[i-1].u;
-        if (uDiff > 0) {
-            forwardCount++;
-            console.log(`  ${i}: u=${crossings[i].u.toFixed(3)}, uDiff=+${uDiff.toFixed(3)} FORWARD`);
-        } else if (uDiff < 0) {
-            backwardCount++;
-            console.log(`  ${i}: u=${crossings[i].u.toFixed(3)}, uDiff=${uDiff.toFixed(3)} BACKWARD`);
-        } else {
-            console.log(`  ${i}: u=${crossings[i].u.toFixed(3)}, uDiff=0 (no change)`);
-        }
-    }
-    
-    if (forwardCount > backwardCount) {
-        direction = 'clockwise';
-    } else if (backwardCount > forwardCount) {
-        direction = 'counter-clockwise';
-    } else {
-        direction = 'unknown';
-    }
-    console.log('Direction determined:', direction, '(forward:', forwardCount, ', backward:', backwardCount, ')');
-    
-    // Step 3: Extract valid lap crossings based on direction
-    // The u value (position along S/F line) determines crossing direction:
-    // - u increases: crossing in "forward" direction along line
-    // - u decreases: crossing in "backward" direction along line
-    // A lap completes when direction changes (forward→backward or backward→forward)
+    // Step 2: Extract lap times from crossings
+    // Every crossing after the first marks the end of a lap and start of the next
     const laps = [];
     let lapStart = null;
-    let lastDirection = null;
     
-    console.log('Lap formation (direction:', direction, '):');
+    console.log('Lap formation:');
     for (let i = 0; i < crossings.length; i++) {
         const crossing = crossings[i];
         
-        let crossingDirection = null;
-        if (i > 0) {
-            const uDiff = crossing.u - crossings[i-1].u;
-            crossingDirection = uDiff >= 0 ? 'forward' : 'backward';
-        }
-        
-        const directionChanged = crossingDirection !== null && lastDirection !== null && crossingDirection !== lastDirection;
-        const isValidLap = i === 0 || directionChanged;
-        
-        console.log(`  Crossing ${i}: u=${crossing.u.toFixed(3)}, dir=${crossingDirection}, dirChanged=${directionChanged}, valid=${isValidLap}, lapStart=${lapStart !== null ? lapStart.toFixed(2) : 'null'}`);
-        
-        if (isValidLap) {
-            if (lapStart === null) {
-                lapStart = crossing.time;
-                console.log(`    -> Start lap at ${lapStart.toFixed(2)}`);
-            } else {
-                const duration = crossing.time - lapStart;
-                
-                if (duration >= cooldown) {
-                    laps.push({
-                        lap: laps.length + 1,
-                        startTime: lapStart,
-                        endTime: crossing.time,
-                        duration: duration
-                    });
-                    console.log(`    -> LAP ${laps.length}: ${lapStart.toFixed(2)} to ${crossing.time.toFixed(2)} = ${duration.toFixed(2)}s`);
-                    lapStart = crossing.time;
-                } else {
-                    console.log(`    -> Rejected (cooldown ${duration.toFixed(2)}s < ${cooldown}s)`);
-                }
-            }
+        if (i === 0) {
+            lapStart = crossing.time;
+            console.log(`  Crossing ${i}: u=${crossing.u.toFixed(3)}, time=${crossing.time.toFixed(2)} - Start lap at ${lapStart.toFixed(2)}`);
         } else {
-            console.log(`    -> Rejected (same direction as previous)`);
-        }
-        
-        if (crossingDirection !== null) {
-            lastDirection = crossingDirection;
+            const duration = crossing.time - lapStart;
+            
+            if (duration >= cooldown) {
+                laps.push({
+                    lap: laps.length + 1,
+                    startTime: lapStart,
+                    endTime: crossing.time,
+                    duration: duration
+                });
+                console.log(`  Crossing ${i}: u=${crossing.u.toFixed(3)}, time=${crossing.time.toFixed(2)} - LAP ${laps.length}: ${lapStart.toFixed(2)} to ${crossing.time.toFixed(2)} = ${duration.toFixed(2)}s`);
+            } else {
+                console.log(`  Crossing ${i}: u=${crossing.u.toFixed(3)}, time=${crossing.time.toFixed(2)} - Rejected (cooldown ${duration.toFixed(2)}s < ${cooldown}s)`);
+            }
+            lapStart = crossing.time;
         }
     }
     

@@ -177,8 +177,8 @@ Comprehensive test plan for GoPro Telemetry Analyzer web application. The applic
     - expect: Speed chart canvas is visible
   2. Verify chart Y-axis label shows 'km/h'
     - expect: Chart has Speed label on Y-axis (km/h)
-  3. Verify chart X-axis label shows 'Time (s)'
-    - expect: Chart has Time label on X-axis (s)
+  3. Verify chart X-axis label shows 'Time'
+    - expect: Chart has Time label on X-axis
   4. Verify chart displays a line dataset with blue color (#2563eb)
     - expect: Speed line is visible on chart
 
@@ -211,8 +211,8 @@ Comprehensive test plan for GoPro Telemetry Analyzer web application. The applic
     - expect: G-Force chart canvas is visible
   2. Verify chart Y-axis label shows 'G'
     - expect: Chart has G label on Y-axis
-  3. Verify chart X-axis label shows 'Time (s)'
-    - expect: Chart has Time label on X-axis (s)
+  3. Verify chart X-axis label shows 'Time'
+    - expect: Chart has Time label on X-axis
   4. Verify chart displays green dataset for longitudinal (GY)
     - expect: Longitudinal G-force line visible (green)
   5. Verify chart displays red dataset for lateral (GZ)
@@ -295,18 +295,16 @@ Comprehensive test plan for GoPro Telemetry Analyzer web application. The applic
     - expect: Best lap is highlighted or indicated
   4. Verify slower laps show '+' prefix, faster show '-'
     - expect: Delta values show + or - relative to best lap
-  5. Verify lap results show 'Direction: clockwise' or 'counter-clockwise'
-    - expect: Lap direction is displayed
+  5. Verify lap results show 'Direction: unknown'
+    - expect: Lap direction shows 'unknown' (direction detection disabled)
 
 #### 9.2. Lap direction toggle functionality
 
 **File:** `tests/laps/lap-direction-toggle.spec.ts`
 
 **Steps:**
-  1. Verify 'Swap direction' button exists and is clickable
-    - expect: 'Swap direction' button available
-  2. Click 'Swap direction' and verify lap times recalculate
-    - expect: Direction toggle recalculates lap times
+  1. Verify 'Swap direction' button does not appear (direction disabled)
+    - expect: 'Swap direction' button is hidden when direction is unknown
 
 ### 10. Error Handling Tests
 

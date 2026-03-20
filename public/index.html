@@ -375,15 +375,15 @@
             
             if (!lr || !lr.laps || lr.laps.length === 0) return;
             
-            var dirBtnText = 'Swap direction';
             var displayDir = state.directionOverride || lr.direction;
+            var dirBtnHtml = displayDir ? '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">Swap direction</button>' : '';
             
             var html = '<div id="lap-results" class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Lap Times</h2>' +
-                '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">' + dirBtnText + '</button>' +
+                dirBtnHtml +
                 '</div>' +
-                '<p class="text-sm text-slate-500 mb-2">Direction: ' + displayDir + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
+                '<p class="text-sm text-slate-500 mb-2">Direction: ' + (displayDir || 'unknown') + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
                 '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th><th class="py-2">Delta</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
@@ -408,7 +408,9 @@
                 state.directionOverride = null;
             } else {
                 var currentDir = state.lapResults.direction;
-                state.directionOverride = currentDir === 'clockwise' ? 'counter-clockwise' : 'clockwise';
+                if (currentDir) {
+                    state.directionOverride = currentDir === 'clockwise' ? 'counter-clockwise' : 'clockwise';
+                }
             }
             
             if (state.sfLine && state.sfLine.start && state.sfLine.end) {
@@ -461,7 +463,14 @@
                                 type: 'linear',
                                 min: 0,
                                 max: duration,
-                                title: { display: true, text: 'Time (s)' }
+                                title: { display: true, text: 'Time' },
+                                ticks: {
+                                    callback: function(value) {
+                                        var mins = Math.floor(value / 60);
+                                        var secs = Math.floor(value % 60);
+                                        return mins + ':' + (secs < 10 ? '0' : '') + secs;
+                                    }
+                                }
                             },
                             y: { 
                                 min: 0,
@@ -507,7 +516,14 @@
                                 type: 'linear',
                                 min: 0,
                                 max: duration,
-                                title: { display: true, text: 'Time (s)' }
+                                title: { display: true, text: 'Time' },
+                                ticks: {
+                                    callback: function(value) {
+                                        var mins = Math.floor(value / 60);
+                                        var secs = Math.floor(value % 60);
+                                        return mins + ':' + (secs < 10 ? '0' : '') + secs;
+                                    }
+                                }
                             },
                             y: { 
                                 min: -gBound,
