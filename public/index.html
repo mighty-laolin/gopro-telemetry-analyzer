@@ -64,6 +64,19 @@
             currentTime: null
         };
 
+        // Exponential Moving Average (EMA) smoothing for G-force data
+        // alpha = smoothing factor (0-1), higher = less smoothing, lower = more smoothing
+        // alpha = 0.2 gives ~5-sample effective window at 10Hz refresh
+        function emaSmooth(data, alpha) {
+            if (!data || data.length === 0) return [];
+            var smoothed = [];
+            smoothed[0] = data[0];
+            for (var i = 1; i < data.length; i++) {
+                smoothed[i] = alpha * data[i] + (1 - alpha) * smoothed[i - 1];
+            }
+            return smoothed;
+        }
+
         // Render
         function render() {
             var app = document.getElementById('app');
@@ -129,7 +142,13 @@
             // Video
             html += '<div class="bg-white rounded-lg shadow-md p-4">' +
                 '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
+                '<div class="relative" style="max-width:100%">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
+                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 12px;border-radius:8px;z-index:100">' +
+                '<div style="font-size:14px">LAP <span id="current-lap-num">-</span></div>' +
+                '<div style="font-size:24px;font-weight:bold" id="current-lap-time">--.--</div>' +
+                '</div>' +
+                '</div>' +
                 '<div class="flex justify-center gap-6 py-2 px-4 bg-slate-100 rounded-lg mt-3">' +
                 '<div class="flex items-center gap-2"><span class="text-2xl">📍</span><span id="speed-display" class="font-bold text-lg">0 km/h</span></div>' +
                 '<div class="flex items-center gap-2 text-green-600"><span class="font-bold">LONG</span><span id="gy-display" class="font-bold text-lg">0.00</span><span class="text-xs">G</span></div>' +
@@ -488,8 +507,13 @@
             // G-Force
             var gCtx = document.getElementById('gforce-chart');
             if (gCtx && gCtx.parentElement) {
-                var allGx = data.map(function(d) { return Math.abs(d.gz); });
-                var allGy = data.map(function(d) { return Math.abs(d.gy); });
+                var rawGy = data.map(function(d) { return d.gy; });
+                var rawGz = data.map(function(d) { return d.gz; });
+                var smoothGy = emaSmooth(rawGy, 0.2);
+                var smoothGz = emaSmooth(rawGz, 0.2);
+                
+                var allGx = smoothGz.map(function(v) { return Math.abs(v); });
+                var allGy = smoothGy.map(function(v) { return Math.abs(v); });
                 var maxG = Math.max(Math.max.apply(null, allGx), Math.max.apply(null, allGy));
                 var gBound = Math.max(1, Math.ceil(maxG));
                 var duration = state.telemetry.duration;
@@ -500,8 +524,8 @@
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: 'Longitudinal', data: data.map(function(d) { return {x: d.t, y: d.gy}; }), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0, tension: 0.3 },
-                            { label: 'Lateral', data: data.map(function(d) { return {x: d.t, y: d.gz}; }), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0, tension: 0.3 }
+                            { label: 'Longitudinal', data: data.map(function(d, i) { return {x: d.t, y: smoothGy[i]}; }), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+                            { label: 'Lateral', data: data.map(function(d, i) { return {x: d.t, y: smoothGz[i]}; }), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0, tension: 0.3 }
                         ]
                     },
                     options: {
@@ -536,6 +560,63 @@
             }
         }
 
+        function updateLapTimer() {
+            var overlay = document.getElementById('lap-timer-overlay');
+            if (!overlay) return;
+            
+            var lr = state.lapResults;
+            var video = document.getElementById('video-player');
+            
+            if (!video || !lr || !lr.laps || lr.laps.length === 0) {
+                overlay.style.display = 'none';
+                return;
+            }
+            
+            overlay.style.display = 'block';
+            
+            var ct = video.currentTime;
+            var currentLap = null;
+            var isShowingFinalTime = false;
+            
+            // Check if we're in a completed lap (between endTime and endTime + 5s)
+            for (var i = 0; i < lr.laps.length; i++) {
+                var lap = lr.laps[i];
+                if (ct >= lap.endTime && ct < lap.endTime + 5) {
+                    currentLap = lap;
+                    isShowingFinalTime = true;
+                    break;
+                }
+            }
+            
+            // If not showing final time, find current active lap
+            if (!isShowingFinalTime) {
+                for (var i = 0; i < lr.laps.length; i++) {
+                    if (ct >= lr.laps[i].startTime && ct < lr.laps[i].endTime) {
+                        currentLap = lr.laps[i];
+                        break;
+                    }
+                }
+                
+                // If past all laps, use last lap as current
+                if (!currentLap && ct >= lr.laps[lr.laps.length - 1].startTime) {
+                    currentLap = lr.laps[lr.laps.length - 1];
+                }
+            }
+            
+            if (currentLap) {
+                document.getElementById('current-lap-num').textContent = currentLap.lap;
+                if (isShowingFinalTime) {
+                    document.getElementById('current-lap-time').textContent = currentLap.duration.toFixed(2);
+                } else {
+                    var lapTime = ct - currentLap.startTime;
+                    document.getElementById('current-lap-time').textContent = lapTime.toFixed(2);
+                }
+            } else {
+                document.getElementById('current-lap-num').textContent = '-';
+                document.getElementById('current-lap-time').textContent = '--.--';
+            }
+        }
+
         function startTelemetryUpdate() {
             if (state.updateInterval) clearInterval(state.updateInterval);
             state.updateInterval = setInterval(function() {
@@ -566,6 +647,8 @@
 
                 if (state.speedChart) state.speedChart.update('none');
                 if (state.gforceChart) state.gforceChart.update('none');
+                
+                updateLapTimer();
             }, 100);
         }
 
