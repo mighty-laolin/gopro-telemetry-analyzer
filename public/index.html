@@ -144,9 +144,11 @@
                 '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
                 '<div class="relative" style="max-width:100%">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
-                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 12px;border-radius:8px;z-index:100">' +
-                '<div style="font-size:14px">LAP <span id="current-lap-num">-</span></div>' +
-                '<div style="font-size:24px;font-weight:bold" id="current-lap-time">--.--</div>' +
+                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:100;font-size:16px">' +
+                '<div style="display:flex;align-items:center;gap:12px">' +
+                '<span>LAP <span id="current-lap-num" style="font-weight:bold">-</span></span>' +
+                '<span id="current-lap-time" style="font-size:28px;font-weight:bold">--.--</span>' +
+                '<span style="color:#a855f7">BEST:<span id="best-lap-time">--.--</span></span>' +
                 '</div>' +
                 '</div>' +
                 '<div class="flex justify-center gap-6 py-2 px-4 bg-slate-100 rounded-lg mt-3">' +
@@ -577,6 +579,8 @@
             var ct = video.currentTime;
             var currentLap = null;
             var isShowingFinalTime = false;
+            var showLapTime = false;
+            var currentLapTime = 0;
             
             // Check if we're in a completed lap (between endTime and endTime + 5s)
             for (var i = 0; i < lr.laps.length; i++) {
@@ -584,6 +588,8 @@
                 if (ct >= lap.endTime && ct < lap.endTime + 5) {
                     currentLap = lap;
                     isShowingFinalTime = true;
+                    showLapTime = true;
+                    currentLapTime = lap.duration;
                     break;
                 }
             }
@@ -593,6 +599,8 @@
                 for (var i = 0; i < lr.laps.length; i++) {
                     if (ct >= lr.laps[i].startTime && ct < lr.laps[i].endTime) {
                         currentLap = lr.laps[i];
+                        showLapTime = true;
+                        currentLapTime = ct - currentLap.startTime;
                         break;
                     }
                 }
@@ -600,17 +608,33 @@
                 // If past all laps, use last lap as current
                 if (!currentLap && ct >= lr.laps[lr.laps.length - 1].startTime) {
                     currentLap = lr.laps[lr.laps.length - 1];
+                    showLapTime = true;
+                    currentLapTime = currentLap.duration;
                 }
             }
             
-            if (currentLap) {
-                document.getElementById('current-lap-num').textContent = currentLap.lap;
-                if (isShowingFinalTime) {
-                    document.getElementById('current-lap-time').textContent = currentLap.duration.toFixed(2);
-                } else {
-                    var lapTime = ct - currentLap.startTime;
-                    document.getElementById('current-lap-time').textContent = lapTime.toFixed(2);
+            // Calculate "best so far" - best lap among completed laps up to current time
+            var bestSoFar = null;
+            var bestSoFarLap = null;
+            
+            for (var i = 0; i < lr.laps.length; i++) {
+                var lap = lr.laps[i];
+                if (lap.endTime <= ct) {
+                    if (!bestSoFar || lap.duration < bestSoFar) {
+                        bestSoFar = lap.duration;
+                        bestSoFarLap = lap;
+                    }
                 }
+            }
+            
+            // Update best lap time display
+            var bestLapEl = document.getElementById('best-lap-time');
+            bestLapEl.textContent = bestSoFar !== null ? bestSoFar.toFixed(2) : '--.--';
+            
+            // Update lap number and time
+            if (currentLap && showLapTime) {
+                document.getElementById('current-lap-num').textContent = currentLap.lap;
+                document.getElementById('current-lap-time').textContent = currentLapTime.toFixed(2);
             } else {
                 document.getElementById('current-lap-num').textContent = '-';
                 document.getElementById('current-lap-time').textContent = '--.--';

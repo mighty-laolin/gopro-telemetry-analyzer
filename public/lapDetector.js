@@ -42,6 +42,9 @@ export function detectLaps(gpsData, sfLine, options = {}) {
         return { laps: [], bestLap: null, direction: null, error: 'Invalid S/F line' };
     }
     
+    // Tolerance for numerical precision (in degrees, ~1 meter at equator)
+    const EPSILON = 0.00001;
+     
     for (let i = 1; i < gpsData.length; i++) {
         const p1 = gpsData[i - 1];
         const p2 = gpsData[i];
@@ -94,9 +97,6 @@ export function detectLaps(gpsData, sfLine, options = {}) {
             console.log('  t:', t, 'u:', u);
             console.log('  t in [0,1]:', t >= 0 && t <= 1, 'u in [0,1]:', u >= 0 && u <= 1);
         }
-        
-        // Tolerance for numerical precision (in degrees, ~1 meter at equator)
-        const EPSILON = 0.00001;
         
         // Check if intersection is within both segments (with tolerance)
         if (t >= -EPSILON && t <= 1 + EPSILON && u >= -EPSILON && u <= 1 + EPSILON) {
@@ -206,20 +206,81 @@ export function detectLaps(gpsData, sfLine, options = {}) {
     
     // Step 4: Calculate best lap and deltas
     let bestLap = null;
+    let bestLapIndex = -1;
     if (laps.length > 0) {
-        bestLap = Math.min(...laps.map(l => l.duration));
+        bestLapIndex = laps.reduce((minIdx, lap, idx) => lap.duration < laps[minIdx].duration ? idx : minIdx, 0);
+        bestLap = laps[bestLapIndex].duration;
         
         laps.forEach(lap => {
             lap.delta = lap.duration - bestLap;
         });
     }
     
+    // Build reference points for each lap: array of {u, time} points for interpolation
+    // u goes from 0 to 1 along the S/F line
+    // Each lap's reference points represent the video timestamps when the GPS track crossed S/F at each u
+    const lapReferences = {};
+    
+    if (laps.length > 0 && gpsData.length > 0) {
+        for (let lapIdx = 0; lapIdx < laps.length; lapIdx++) {
+            const lap = laps[lapIdx];
+            const lapStartTime = lap.startTime;
+            const lapEndTime = lap.endTime;
+            
+            const referencePoints = [];
+            
+            for (let i = 1; i < gpsData.length; i++) {
+                const p1 = gpsData[i - 1];
+                const p2 = gpsData[i];
+                
+                // Calculate t and u for this GPS segment crossing S/F line
+                const gpsDx = p2.lon - p1.lon;
+                const gpsDy = p2.lat - p1.lat;
+                const vx = start.lon - p1.lon;
+                const vy = start.lat - p1.lat;
+                const denom_raw = gpsDx * sfDy_raw - gpsDy * sfDx_raw;
+                
+                if (Math.abs(denom_raw) < 0.000000001) continue;
+                
+                const t = (vx * sfDy_raw - vy * sfDx_raw) / denom_raw;
+                const u = (vx * gpsDy - vy * gpsDx) / denom_raw;
+                
+                // Check if intersection is valid (within segment with tolerance)
+                if (t >= -EPSILON && t <= 1 + EPSILON && u >= -EPSILON && u <= 1 + EPSILON) {
+                    // Calculate the intersection TIME (video timestamp when GPS track crossed S/F)
+                    const time = p1.t + t * (p2.t - p1.t);
+                    
+                    // Only include if intersection time is within this lap's time window
+                    if (time >= lapStartTime && time <= lapEndTime) {
+                        referencePoints.push({ u: Math.max(0, Math.min(1, u)), time: time });
+                    }
+                }
+            }
+            
+            // Sort by u and store with lap number as key
+            referencePoints.sort((a, b) => a.u - b.u);
+            lapReferences[lap.lap] = referencePoints;
+            
+            console.log(`Lap ${lap.lap}: ${referencePoints.length} reference points, start=${lapStartTime.toFixed(2)}, end=${lapEndTime.toFixed(2)}, duration=${lap.duration.toFixed(2)}`);
+            if (referencePoints.length > 0) {
+                console.log(`  First: u=${referencePoints[0].u.toFixed(3)}, time=${referencePoints[0].time.toFixed(2)}`);
+                console.log(`  Last: u=${referencePoints[referencePoints.length-1].u.toFixed(3)}, time=${referencePoints[referencePoints.length-1].time.toFixed(2)}`);
+            }
+        }
+    }
+    
+    // Get best lap's reference for backward compatibility
+    const bestLapReference = bestLapIndex >= 0 ? lapReferences[laps[bestLapIndex].lap] : null;
+    
     console.log('Laps found:', laps.length);
+    console.log('All lap reference keys:', Object.keys(lapReferences));
     console.log('=== END DEBUG ===\n');
     
     return {
         laps: laps,
         bestLap: bestLap,
+        bestLapReference: bestLapReference,
+        lapReferences: lapReferences,
         direction: direction,
         crossingCount: crossings.length
     };
