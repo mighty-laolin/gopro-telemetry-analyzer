@@ -9,8 +9,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <script type="module">
-        import { detectLaps, calculateLineLength } from './lapDetector.js';
+        import { detectLaps, detectSectors, calculateLineLength } from './lapDetector.js';
         window.detectLaps = detectLaps;
+        window.detectSectors = detectSectors;
         window.calculateLineLength = calculateLineLength;
     </script>
 </head>
@@ -61,7 +62,12 @@
             speedChart: null,
             gforceChart: null,
             updateInterval: null,
-            currentTime: null
+            currentTime: null,
+            sectorLines: [],
+            sectorLineLayers: [],
+            sectorMarkers: [],
+            sectorPlacementMode: null,
+            selectedSectorIndex: null
         };
 
         // Exponential Moving Average (EMA) smoothing for G-force data
@@ -144,11 +150,16 @@
                 '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
                 '<div class="relative" style="max-width:100%">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
-                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:100;font-size:16px">' +
-                '<div style="display:flex;align-items:center;gap:12px">' +
-                '<span>LAP <span id="current-lap-num" style="font-weight:bold">-</span></span>' +
-                '<span id="current-lap-time" style="font-size:28px;font-weight:bold">--.--</span>' +
-                '<span style="color:#a855f7">BEST:<span id="best-lap-time">--.--</span></span>' +
+                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:100;font-size:16px;min-width:290px">' +
+                '<div style="display:flex;align-items:center;gap:12px;white-space:nowrap">' +
+                '<span style="min-width:60px">LAP <span id="current-lap-num" style="font-weight:bold">-</span></span>' +
+                '<span id="current-lap-time" style="font-size:28px;font-weight:bold;min-width:90px">--.--s</span>' +
+                '<span style="color:#a855f7;min-width:110px">BEST: <span id="best-lap-time">--.--s</span></span>' +
+                '</div>' +
+                '<div id="sector-times-row" style="font-size:14px;margin-top:4px;gap:8px;display:none;white-space:nowrap">' +
+                '<span style="min-width:80px">S1: <span id="s1-time">--.--</span>s</span>' +
+                '<span style="min-width:80px">S2: <span id="s2-time">--.--</span>s</span>' +
+                '<span id="s3-container" style="min-width:80px">S3: <span id="s3-time">--.--</span>s</span>' +
                 '</div>' +
                 '</div>' +
                 '<div class="flex justify-center gap-6 py-2 px-4 bg-slate-100 rounded-lg mt-3">' +
@@ -177,7 +188,11 @@
             html += '<div class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Track Map</h2>' +
+                '<div class="flex gap-2">' +
                 '<button id="sf-btn" class="px-4 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700">Set S/F Line</button>' +
+                '<button id="sector-btn" class="px-4 py-2 rounded-lg text-white bg-orange-500 hover:bg-orange-600">Add Sector</button>' +
+                '<button id="delete-sector-btn" class="px-4 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 hidden">Delete Sector</button>' +
+                '</div>' +
                 '</div>' +
                 '<div id="map" class="h-96 rounded-lg"></div></div>';
 
@@ -199,6 +214,18 @@
             var sfBtn = document.getElementById('sf-btn');
             if (sfBtn) {
                 sfBtn.addEventListener('click', toggleSfMode);
+            }
+
+            // Sector button
+            var sectorBtn = document.getElementById('sector-btn');
+            if (sectorBtn) {
+                sectorBtn.addEventListener('click', toggleSectorMode);
+            }
+
+            // Delete Sector button
+            var deleteSectorBtn = document.getElementById('delete-sector-btn');
+            if (deleteSectorBtn) {
+                deleteSectorBtn.addEventListener('click', deleteSelectedSector);
             }
 
             // Wait for DOM to settle then init
@@ -264,9 +291,119 @@
                     state.sfLineLayer = null;
                 }
                 state.lapResults = null;
+                state.selectedSectorIndex = null;
+                state.sectorLines.forEach(function(layer) { state.map.removeLayer(layer); });
+                state.sectorLines = [];
+                state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+                state.sectorLineLayers = [];
+                state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                state.sectorMarkers = [];
             }
             updateSfButton();
             updateLapResults();
+            updateSectorButton();
+        }
+
+        function toggleSectorMode() {
+            if (state.sectorLines.length >= 2) {
+                return;
+            }
+            
+            if (!state.sectorPlacementMode) {
+                state.sectorPlacementMode = { __placing: 'first', lineIndex: state.sectorLines.length };
+            } else if (state.sectorPlacementMode.__placing) {
+                state.sectorPlacementMode = null;
+                state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                state.sectorMarkers = [];
+                if (state.sectorLineLayers.length > 0) {
+                    var lastLayer = state.sectorLineLayers.pop();
+                    state.map.removeLayer(lastLayer);
+                }
+            } else {
+                state.sectorPlacementMode = { __placing: 'first', lineIndex: state.sectorLines.length };
+            }
+            
+            state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+            state.sectorMarkers = [];
+            updateSectorButton();
+        }
+
+        function updateSectorButton() {
+            var btn = document.getElementById('sector-btn');
+            if (!btn) return;
+            
+            var btnClass = 'px-4 py-2 rounded-lg text-white ';
+            
+            if (state.sectorLines.length >= 2) {
+                btnClass += 'bg-gray-400 cursor-not-allowed';
+                btn.textContent = 'Max Sectors';
+            } else if (state.sectorPlacementMode && state.sectorPlacementMode.__placing === 'first') {
+                btnClass += 'bg-yellow-500 hover:bg-yellow-600';
+                btn.textContent = 'Click 1st point';
+            } else if (state.sectorPlacementMode && state.sectorPlacementMode.__placing === 'second') {
+                btnClass += 'bg-yellow-500 hover:bg-yellow-600';
+                btn.textContent = 'Click 2nd point';
+            } else {
+                btnClass += 'bg-orange-500 hover:bg-orange-600';
+                btn.textContent = 'Add Sector';
+            }
+            btn.className = btnClass;
+            
+            var deleteBtn = document.getElementById('delete-sector-btn');
+            if (deleteBtn) {
+                if (state.selectedSectorIndex !== null && state.sectorLines.length > 0) {
+                    deleteBtn.classList.remove('hidden');
+                } else {
+                    deleteBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        function selectSector(index) {
+            state.selectedSectorIndex = index;
+            
+            for (var i = 0; i < state.sectorLineLayers.length; i++) {
+                if (i === index) {
+                    state.sectorLineLayers[i].setStyle({ color: '#eab308', weight: 5 });
+                } else {
+                    state.sectorLineLayers[i].setStyle({ color: '#f97316', weight: 4 });
+                }
+            }
+            
+            updateSectorButton();
+        }
+
+        function deleteSelectedSector() {
+            if (state.selectedSectorIndex === null) return;
+            
+            var indexToRemove = state.selectedSectorIndex;
+            
+            if (indexToRemove < state.sectorLines.length) {
+                state.sectorLines.splice(indexToRemove, 1);
+            }
+            
+            if (indexToRemove < state.sectorLineLayers.length) {
+                var layer = state.sectorLineLayers.splice(indexToRemove, 1)[0];
+                state.map.removeLayer(layer);
+            }
+            
+            state.selectedSectorIndex = null;
+            
+            for (var i = 0; i < state.sectorLineLayers.length; i++) {
+                state.sectorLineLayers[i].setStyle({ color: '#f97316', weight: 4 });
+            }
+            
+            if (state.lapResults && state.lapResults.laps.length > 0 && state.sfLine && state.sfLine.start && state.sfLine.end) {
+                var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                state.lapResults.laps = sectorResult.laps;
+                state.lapResults.sectorIndices = sectorResult.sectorIndices;
+            }
+            
+            updateSectorButton();
+            updateLapResults();
+            
+            var overlay = document.getElementById('lap-timer-overlay');
+            if (overlay) overlay.style.width = 'auto';
         }
 
         function updateSfButton() {
@@ -317,10 +454,20 @@
             L.polyline(positions, { color: '#2563eb', weight: 3 }).addTo(state.map);
 
             state.map.on('click', function(e) {
-                if (!state.sfLine || !state.sfLine.__placing) return;
-                
                 var clickPos = { lat: e.latlng.lat, lon: e.latlng.lng };
                 
+                if (state.sectorPlacementMode && state.sectorPlacementMode.__placing) {
+                    handleSectorClick(clickPos);
+                    return;
+                }
+                
+                if (state.sfLine && state.sfLine.__placing) {
+                    handleSfClick(clickPos);
+                    return;
+                }
+            });
+            
+            function handleSfClick(clickPos) {
                 if (state.sfLine.__placing === 'first') {
                     state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
                     state.sfMarkers = [];
@@ -374,11 +521,21 @@
                         [state.sfLine.end.lat, state.sfLine.end.lon]
                     ], { color: '#22c55e', weight: 4, opacity: 1 }).addTo(state.map);
                     
+                    state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                    state.sfMarkers = [];
+                    
                     state.directionOverride = null;
                     console.log('Calling detectLaps with sfLine:', state.sfLine);
                     try {
                         state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
                         console.log('detectLaps returned:', state.lapResults);
+                        
+                        if (state.sectorLines.length > 0 && state.lapResults && state.lapResults.laps.length > 0) {
+                            var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                            state.lapResults.laps = sectorResult.laps;
+                            state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                            console.log('detectSectors returned:', state.lapResults);
+                        }
                     } catch (e) {
                         console.error('detectLaps error:', e);
                     }
@@ -386,7 +543,91 @@
                     updateSfButton();
                     updateLapResults();
                 }
-            });
+            }
+            
+            function handleSectorClick(clickPos) {
+                var lineIndex = state.sectorPlacementMode.lineIndex;
+                var placing = state.sectorPlacementMode.__placing;
+                
+                if (placing === 'first') {
+                    state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                    state.sectorMarkers = [];
+                    
+                    if (!state.sectorLines[lineIndex]) {
+                        state.sectorLines[lineIndex] = { start: null, end: null };
+                    }
+                    state.sectorLines[lineIndex].start = clickPos;
+                    state.sectorPlacementMode.__placing = 'second';
+                    
+                    var marker = L.circleMarker([clickPos.lat, clickPos.lon], {
+                        radius: 6, color: '#f97316', fillColor: '#f97316', fillOpacity: 1
+                    }).addTo(state.map);
+                    state.sectorMarkers.push(marker);
+                    
+                    updateSectorButton();
+                } else if (placing === 'second') {
+                    state.sectorLines[lineIndex].end = clickPos;
+                    
+                    var dlat = state.sectorLines[lineIndex].end.lat - state.sectorLines[lineIndex].start.lat;
+                    var dlon = state.sectorLines[lineIndex].end.lon - state.sectorLines[lineIndex].start.lon;
+                    var midLat = (state.sectorLines[lineIndex].start.lat + state.sectorLines[lineIndex].end.lat) / 2;
+                    var metersPerDegLon = 111320 * Math.cos(midLat * Math.PI / 180);
+                    var metersPerDegLat = 111320;
+                    var lineLength = Math.sqrt(
+                        Math.pow(dlat * metersPerDegLat, 2) +
+                        Math.pow(dlon * metersPerDegLon, 2)
+                    );
+                    
+                    console.log('Sector line length:', lineLength, 'meters');
+                    
+                    if (lineLength > 20) {
+                        alert('Sector line cannot be longer than 20 meters. Please set a shorter line.');
+                        state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                        state.sectorMarkers = [];
+                        state.sectorLines[lineIndex] = { start: null, end: null };
+                        state.sectorPlacementMode.__placing = 'first';
+                        updateSectorButton();
+                        return;
+                    }
+                    
+                    state.sectorPlacementMode = null;
+                    
+                    var marker2 = L.circleMarker([clickPos.lat, clickPos.lon], {
+                        radius: 6, color: '#f97316', fillColor: '#f97316', fillOpacity: 1
+                    }).addTo(state.map);
+                    state.sectorMarkers.push(marker2);
+                    
+                    var sectorLayer = L.polyline([
+                        [state.sectorLines[lineIndex].start.lat, state.sectorLines[lineIndex].start.lon],
+                        [state.sectorLines[lineIndex].end.lat, state.sectorLines[lineIndex].end.lon]
+                    ], { color: '#f97316', weight: 4, opacity: 1 }).on('click', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        selectSector(lineIndex);
+                    }).addTo(state.map);
+                    state.sectorLineLayers.push(sectorLayer);
+                    
+                    state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+                    state.sectorMarkers = [];
+                    
+                    console.log('Calling detectSectors with sectorLines:', state.sectorLines);
+                    try {
+                        if (state.lapResults && state.lapResults.laps.length > 0) {
+                            var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                            state.lapResults.laps = sectorResult.laps;
+                            state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                            console.log('detectSectors returned:', state.lapResults);
+                        }
+                    } catch (e) {
+                        console.error('detectSectors error:', e);
+                    }
+                    
+                    updateSectorButton();
+                    updateLapResults();
+                    
+                    var overlay = document.getElementById('lap-timer-overlay');
+                    if (overlay) overlay.style.width = 'auto';
+                }
+            }
         }
 
         function updateLapResults() {
@@ -399,17 +640,41 @@
             var displayDir = state.directionOverride || lr.direction;
             var dirBtnHtml = displayDir ? '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">Swap direction</button>' : '';
             
+            var sectorCount = state.sectorLines.length;
+            var sectorHeaderHtml = '';
+            if (sectorCount === 1) {
+                sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th>';
+            } else if (sectorCount === 2) {
+                sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th><th class="py-2">S3</th>';
+            }
+            
             var html = '<div id="lap-results" class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Lap Times</h2>' +
                 dirBtnHtml +
                 '</div>' +
                 '<p class="text-sm text-slate-500 mb-2">Direction: ' + (displayDir || 'unknown') + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
-                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th><th class="py-2">Delta</th></tr></thead><tbody>';
+                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
-                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td><td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td></tr>';
+                
+                var sectorCellsHtml = '';
+                if (sectorCount === 1) {
+                    var s1Time = lap.sectorTimes ? lap.sectorTimes.s1 : null;
+                    var s3Time = lap.sectorTimes ? lap.sectorTimes.s3 : null;
+                    sectorCellsHtml = '<td class="py-2">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
+                } else if (sectorCount === 2) {
+                    var s1Time = lap.sectorTimes ? lap.sectorTimes.s1 : null;
+                    var s2Time = lap.sectorTimes ? lap.sectorTimes.s2 : null;
+                    var s3Time = lap.sectorTimes ? lap.sectorTimes.s3 : null;
+                    sectorCellsHtml = '<td class="py-2">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="py-2">' + (s2Time !== null ? s2Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
+                }
+                
+                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td></tr>';
             }
             html += '</tbody></table></div>';
             
@@ -436,6 +701,12 @@
             
             if (state.sfLine && state.sfLine.start && state.sfLine.end) {
                 state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
+                
+                if (state.sectorLines.length > 0) {
+                    var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                    state.lapResults.laps = sectorResult.laps;
+                    state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                }
             }
             
             updateLapResults();
@@ -615,29 +886,97 @@
             
             // Calculate "best so far" - best lap among completed laps up to current time
             var bestSoFar = null;
-            var bestSoFarLap = null;
             
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 if (lap.endTime <= ct) {
                     if (!bestSoFar || lap.duration < bestSoFar) {
                         bestSoFar = lap.duration;
-                        bestSoFarLap = lap;
                     }
                 }
             }
             
             // Update best lap time display
             var bestLapEl = document.getElementById('best-lap-time');
-            bestLapEl.textContent = bestSoFar !== null ? bestSoFar.toFixed(2) : '--.--';
+            bestLapEl.textContent = bestSoFar !== null ? bestSoFar.toFixed(2) + 's' : '--.--s';
             
             // Update lap number and time
             if (currentLap && showLapTime) {
                 document.getElementById('current-lap-num').textContent = currentLap.lap;
-                document.getElementById('current-lap-time').textContent = currentLapTime.toFixed(2);
+                document.getElementById('current-lap-time').textContent = currentLapTime.toFixed(2) + 's';
             } else {
                 document.getElementById('current-lap-num').textContent = '-';
-                document.getElementById('current-lap-time').textContent = '--.--';
+                document.getElementById('current-lap-time').textContent = '--.--s';
+            }
+            
+            // Update sector times
+            var sectorRow = document.getElementById('sector-times-row');
+            var sectorCount = state.sectorLines.length;
+            
+            if (sectorCount === 0) {
+                sectorRow.style.display = 'none';
+            } else {
+                sectorRow.style.display = 'flex';
+                
+                var s1El = document.getElementById('s1-time');
+                var s2El = document.getElementById('s2-time');
+                var s3Container = document.getElementById('s3-container');
+                var s3El = document.getElementById('s3-time');
+                
+                if (sectorCount === 1) {
+                    s2El.parentElement.style.display = 'inline';
+                    s3Container.style.display = 'none';
+                } else if (sectorCount === 2) {
+                    s2El.parentElement.style.display = 'inline';
+                    s3Container.style.display = 'inline';
+                }
+                
+                if (currentLap && currentLap.sectorTimes) {
+                    var lapStartTime = currentLap.startTime;
+                    var s1Time = currentLap.sectorTimes.s1;
+                    var s2Time = currentLap.sectorTimes.s2;
+                    var s3Time = currentLap.sectorTimes.s3;
+                    
+                    if (isShowingFinalTime) {
+                        s1El.textContent = s1Time !== null ? s1Time.toFixed(2) : '--.--';
+                        if (sectorCount === 1) {
+                            s2El.textContent = s3Time !== null ? s3Time.toFixed(2) : '--.--';
+                        } else {
+                            s2El.textContent = s2Time !== null ? s2Time.toFixed(2) : '--.--';
+                            s3El.textContent = s3Time !== null ? s3Time.toFixed(2) : '--.--';
+                        }
+                    } else {
+                        var s1Threshold = lapStartTime + (s1Time !== null ? s1Time : 0);
+                        var s2Threshold = s1Threshold + (s2Time !== null ? s2Time : 0);
+                        
+                        if (s1Time !== null && ct >= s1Threshold) {
+                            s1El.textContent = s1Time.toFixed(2);
+                        } else {
+                            s1El.textContent = '--.--';
+                        }
+                        
+                        if (sectorCount === 1) {
+                            s2El.textContent = '--.--';
+                        } else {
+                            if (s2Time !== null && ct >= s2Threshold) {
+                                s2El.textContent = s2Time.toFixed(2);
+                            } else {
+                                s2El.textContent = '--.--';
+                            }
+                            s3El.textContent = '--.--';
+                        }
+                    }
+                } else {
+                    s1El.textContent = '--.--';
+                    s2El.textContent = '--.--';
+                    s3El.textContent = '--.--';
+                }
+            }
+            
+            // Fix overlay width to prevent flickering as times change
+            var overlay = document.getElementById('lap-timer-overlay');
+            if (overlay && overlay.style.display !== 'none') {
+                overlay.style.width = overlay.offsetWidth + 'px';
             }
         }
 

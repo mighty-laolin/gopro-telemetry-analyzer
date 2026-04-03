@@ -314,3 +314,167 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
     
     return (bearing + 360) % 360;
 }
+
+function findLineCrossing(p1, p2, lineStart, lineEnd) {
+    const gpsDx = p2.lon - p1.lon;
+    const gpsDy = p2.lat - p1.lat;
+    const sfDx = lineEnd.lon - lineStart.lon;
+    const sfDy = lineEnd.lat - lineStart.lat;
+    
+    const vx = lineStart.lon - p1.lon;
+    const vy = lineStart.lat - p1.lat;
+    
+    const denom_raw = gpsDx * sfDy - gpsDy * sfDx;
+    
+    if (Math.abs(denom_raw) < 0.000000001) return null;
+    
+    const t = (vx * sfDy - vy * sfDx) / denom_raw;
+    const u = (vx * gpsDy - vy * gpsDx) / denom_raw;
+    
+    const EPSILON = 0.00001;
+    
+    if (t >= -EPSILON && t <= 1 + EPSILON && u >= -EPSILON && u <= 1 + EPSILON) {
+        const tClamped = Math.max(0, Math.min(1, t));
+        return {
+            time: p1.t + tClamped * (p2.t - p1.t),
+            t: tClamped,
+            u: u
+        };
+    }
+    
+    return null;
+}
+
+export function detectSectors(gpsData, sfLine, sectorLines, laps) {
+    if (!gpsData || gpsData.length === 0 || !laps || laps.length === 0) {
+        return { laps: laps, sectorIndices: [] };
+    }
+    
+    if (!sectorLines || sectorLines.length === 0) {
+        return { laps: laps, sectorIndices: [] };
+    }
+    
+    console.log('=== SECTOR DETECTION DEBUG ===');
+    console.log('Sector lines count:', sectorLines.length);
+    
+    const sectorCrossings = [];
+    
+    for (let sIdx = 0; sIdx < sectorLines.length; sIdx++) {
+        const sector = sectorLines[sIdx];
+        const crossings = [];
+        
+        for (let i = 1; i < gpsData.length; i++) {
+            const p1 = gpsData[i - 1];
+            const p2 = gpsData[i];
+            
+            const result = findLineCrossing(p1, p2, sector.start, sector.end);
+            
+            if (result) {
+                crossings.push({
+                    time: result.time,
+                    sectorIndex: sIdx
+                });
+            }
+        }
+        
+        sectorCrossings.push(crossings);
+        console.log(`Sector ${sIdx}: ${crossings.length} crossings`);
+    }
+    
+    const sectorTimesFromSF = [];
+    for (let sIdx = 0; sIdx < sectorLines.length; sIdx++) {
+        const crossings = sectorCrossings[sIdx];
+        if (crossings.length === 0) {
+            sectorTimesFromSF.push(Infinity);
+            continue;
+        }
+        
+        let totalTime = 0;
+        let count = 0;
+        
+        for (let lapIdx = 0; lapIdx < laps.length; lapIdx++) {
+            const lap = laps[lapIdx];
+            
+            for (let c = 0; c < crossings.length; c++) {
+                const crossing = crossings[c];
+                if (crossing.time > lap.startTime && crossing.time < lap.endTime) {
+                    const timeFromSF = crossing.time - lap.startTime;
+                    totalTime += timeFromSF;
+                    count++;
+                    break;
+                }
+            }
+        }
+        
+        const avgTime = count > 0 ? totalTime / count : Infinity;
+        sectorTimesFromSF.push(avgTime);
+        console.log(`Sector ${sIdx} avg time from SF: ${avgTime.toFixed(3)}s`);
+    }
+    
+    const indexedSectors = sectorTimesFromSF.map((t, i) => ({ time: t, originalIndex: i }));
+    indexedSectors.sort((a, b) => a.time - b.time);
+    
+    const orderedSectorIndices = indexedSectors.map(s => s.originalIndex);
+    console.log('Ordered sector indices (by time from SF):', orderedSectorIndices);
+    
+    for (let lapIdx = 0; lapIdx < laps.length; lapIdx++) {
+        const lap = laps[lapIdx];
+        lap.sectorTimes = { s1: null, s2: null, s3: null };
+        
+        const sfCrossingsInLap = [];
+        for (let i = 1; i < gpsData.length; i++) {
+            const p1 = gpsData[i - 1];
+            const p2 = gpsData[i];
+            const result = findLineCrossing(p1, p2, sfLine.start, sfLine.end);
+            if (result && result.time >= lap.startTime && result.time <= lap.endTime) {
+                sfCrossingsInLap.push(result.time);
+            }
+        }
+        
+        if (sfCrossingsInLap.length === 0) continue;
+        sfCrossingsInLap.sort((a, b) => a - b);
+        
+        for (let sOrdIdx = 0; sOrdIdx < orderedSectorIndices.length; sOrdIdx++) {
+            const originalSectorIdx = orderedSectorIndices[sOrdIdx];
+            const crossings = sectorCrossings[originalSectorIdx];
+            
+            let sectorCrossingTime = null;
+            for (let c = 0; c < crossings.length; c++) {
+                const crossing = crossings[c];
+                if (crossing.time > lap.startTime && crossing.time < lap.endTime) {
+                    sectorCrossingTime = crossing.time;
+                    break;
+                }
+            }
+            
+            if (sectorCrossingTime === null) continue;
+            
+            const sectorKey = 's' + (sOrdIdx + 1);
+            lap.sectorTimes[sectorKey] = sectorCrossingTime;
+        }
+        
+        if (orderedSectorIndices.length === 1) {
+            if (lap.sectorTimes.s1 !== null) {
+                lap.sectorTimes.s3 = lap.endTime - lap.sectorTimes.s1;
+                lap.sectorTimes.s1 = lap.sectorTimes.s1 - lap.startTime;
+            }
+        } else if (orderedSectorIndices.length === 2) {
+            if (lap.sectorTimes.s1 !== null && lap.sectorTimes.s2 !== null) {
+                const s1Time = lap.sectorTimes.s1;
+                const s2Time = lap.sectorTimes.s2;
+                lap.sectorTimes.s1 = s1Time - lap.startTime;
+                lap.sectorTimes.s2 = s2Time - s1Time;
+                lap.sectorTimes.s3 = lap.endTime - s2Time;
+            }
+        }
+        
+        console.log(`Lap ${lap.lap}: sectorTimes =`, lap.sectorTimes);
+    }
+    
+    console.log('=== END SECTOR DEBUG ===\n');
+    
+    return {
+        laps: laps,
+        sectorIndices: orderedSectorIndices
+    };
+}
