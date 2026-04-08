@@ -12,6 +12,7 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 - **Sector Timing**: Up to 3 sectors with per-sector time tracking
 - **Real-time Updates**: Telemetry values update as video plays
 - **Lap Timer Overlay**: Live lap time, best lap, and sector times on video
+- **Lap Labels on Charts**: Visual lap boundaries with clickable labels to jump to lap start
 
 ## Requirements
 
@@ -79,6 +80,12 @@ http://localhost:3001
 7. **Play Video**: The vertical cursor on charts moves in sync with video playback
    - Lap timer overlay shows current lap number, lap time, best lap time, and sector times
    - Sector times update in real-time as you pass each sector line
+   - Lap labels (yellow) on charts mark lap boundaries - click to jump to that lap
+
+8. **Chart Lap Labels**:
+   - Gray dotted vertical lines show lap boundaries on speed and G-force charts
+   - Yellow "Lap N" labels appear at the bottom inside each chart
+   - Click any label to seek the video to that lap's start time
 
 ## Project Structure
 
@@ -108,3 +115,4 @@ http://localhost:3001
 - Sector lines are ordered by time from S/F (shortest time = S1)
 - Maximum 2 sector lines (3 total sectors per lap)
 - G-force display: gy = longitudinal (green), gz = lateral (red)
+- Lap labels on charts: click to seek video to lap start time

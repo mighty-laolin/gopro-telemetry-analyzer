@@ -45,8 +45,39 @@
             }
         };
 
-        // Register custom plugin globally
+        // Custom Chart.js plugin for lap boundary lines
+        var lapLinesPlugin = {
+            id: 'lapLines',
+            afterDraw: function(chart) {
+                if (typeof state === 'undefined' || !state.lapResults || !state.lapResults.laps) return;
+                
+                var ctx = chart.ctx;
+                var xAxis = chart.scales.x;
+                var yAxis = chart.scales.y;
+                var chartArea = chart.chartArea;
+                
+                ctx.save();
+                ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                
+                state.lapResults.laps.forEach(function(lap) {
+                    var x = xAxis.getPixelForValue(lap.startTime);
+                    if (x >= chartArea.left && x <= chartArea.right) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, chartArea.top);
+                        ctx.lineTo(x, chartArea.bottom);
+                        ctx.stroke();
+                    }
+                });
+                
+                ctx.restore();
+            }
+        };
+
+        // Register custom plugins globally
         Chart.register(verticalCursorPlugin);
+        Chart.register(lapLinesPlugin);
 
         var state = {
             telemetry: null,
@@ -179,10 +210,10 @@
                 '</div>';
 
             // Speed Chart
-            html += '<div class="bg-white rounded-lg shadow p-4"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><canvas id="speed-chart" class="w-full" style="height:256px"></canvas></div>';
+            html += '<div class="bg-white rounded-lg shadow p-4 relative"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // G-Force Chart
-            html += '<div class="bg-white rounded-lg shadow p-4"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><canvas id="gforce-chart" class="w-full" style="height:256px"></canvas></div>';
+            html += '<div class="bg-white rounded-lg shadow p-4 relative"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // Map
             html += '<div class="bg-white rounded-lg shadow p-4">' +
@@ -542,6 +573,7 @@
                     
                     updateSfButton();
                     updateLapResults();
+                    updateLapLabels();
                 }
             }
             
@@ -710,6 +742,7 @@
             }
             
             updateLapResults();
+            updateLapLabels();
         }
 
         function initCharts() {
@@ -831,6 +864,66 @@
                     }
                 });
             }
+            
+            updateLapLabels();
+        }
+
+        function updateLapLabels() {
+            if (!state.lapResults || !state.lapResults.laps || state.lapResults.laps.length === 0) {
+                var speedLabels = document.getElementById('speed-lap-labels');
+                var gforceLabels = document.getElementById('gforce-lap-labels');
+                if (speedLabels) speedLabels.innerHTML = '';
+                if (gforceLabels) gforceLabels.innerHTML = '';
+                return;
+            }
+            
+            var laps = state.lapResults.laps;
+            
+            function createLabels(containerId, chart) {
+                var container = document.getElementById(containerId);
+                if (!container || !chart) return;
+                container.innerHTML = '';
+                
+                var chartArea = chart.chartArea;
+                var chartCanvas = chart.canvas;
+                var canvasRect = chartCanvas.getBoundingClientRect();
+                
+                container.style.left = chartArea.left + 'px';
+                container.style.width = (chartArea.right - chartArea.left) + 'px';
+                container.style.top = (chartArea.bottom - 30) + 'px';
+                container.style.height = '20px';
+                
+                laps.forEach(function(lap) {
+                    var xAxis = chart.scales.x;
+                    var pixelX = xAxis.getPixelForValue(lap.startTime);
+                    
+                    var label = document.createElement('span');
+                    label.textContent = 'Lap ' + lap.lap;
+                    label.style.position = 'absolute';
+                    label.style.left = (pixelX - chartArea.left) + 'px';
+                    label.style.transform = 'translateX(-50%)';
+                    label.style.cursor = 'pointer';
+                    label.style.color = '#eab308';
+                    label.style.fontSize = '12px';
+                    label.style.whiteSpace = 'nowrap';
+                    label.style.pointerEvents = 'auto';
+                    label.style.padding = '2px 4px';
+                    label.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                    label.style.borderRadius = '2px';
+                    
+                    label.addEventListener('click', function() {
+                        var video = document.getElementById('video-player');
+                        if (video) {
+                            video.currentTime = lap.startTime;
+                        }
+                    });
+                    
+                    container.appendChild(label);
+                });
+            }
+            
+            createLabels('speed-lap-labels', state.speedChart);
+            createLabels('gforce-lap-labels', state.gforceChart);
         }
 
         function updateLapTimer() {
