@@ -94,7 +94,8 @@ http://localhost:3001
 ├── server.js                    # Express server
 ├── public/
 │   ├── index.html              # Frontend (HTML/CSS/JS)
-│   └── lapDetector.js          # Lap and sector detection logic
+│   ├── lapDetector.js          # Lap and sector detection logic
+│   └── gForceAnalyzer.js       # G-force analysis algorithms
 ├── gpmf-parser-main/
 │   └── demo/
 │       └── gps_parser          # C binary (GPS + ACCL extraction)
@@ -115,4 +116,5 @@ http://localhost:3001
 - Sector lines are ordered by time from S/F (shortest time = S1)
 - Maximum 2 sector lines (3 total sectors per lap)
 - G-force display: gy = longitudinal (green), gz = lateral (red)
+- Max G-force shown is horizontal G-force = sqrt(gy² + gz²) (excludes vertical)
 - Lap labels on charts: click to seek video to lap start time

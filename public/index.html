@@ -10,9 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <script type="module">
         import { detectLaps, detectSectors, calculateLineLength } from './lapDetector.js';
+        import { computeMaxHorizontalGForce } from './gForceAnalyzer.js';
         window.detectLaps = detectLaps;
         window.detectSectors = detectSectors;
         window.calculateLineLength = calculateLineLength;
+        window.computeMaxHorizontalGForce = computeMaxHorizontalGForce;
     </script>
 </head>
 <body>
@@ -169,6 +171,8 @@
 
         function renderDashboard() {
             var t = state.telemetry;
+            var maxHGFResult = t.data ? computeMaxHorizontalGForce(t.data) : { value: 0, timestamp: 0 };
+            console.log('Max Horizontal G:', maxHGFResult.value, 'at time:', maxHGFResult.timestamp);
 
             var html = '<div class="min-h-screen bg-slate-50">' +
                 '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
@@ -204,7 +208,7 @@
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4">' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + t.maxGForce.toFixed(2) + 'G</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + t.totalDistance.toFixed(2) + ' km</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + t.duration.toFixed(0) + 's</p></div>' +
                 '</div>';
