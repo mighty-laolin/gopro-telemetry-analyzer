@@ -87,6 +87,15 @@ http://localhost:3001
    - Yellow "Lap N" labels appear at the bottom inside each chart
    - Click any label to seek the video to that lap's start time
 
+9. **Chart Zoom and Pan**:
+   - Mouse wheel to zoom in/out on charts (max zoom: 60 seconds, min: full duration)
+   - Click and drag to pan when zoomed in
+   - Both speed and G-force charts support independent zoom/pan
+   - Lap labels automatically hide when outside visible range
+
+10. **Upload New Video**:
+    - Click "Upload New Video" button in the header to reset and upload a new video
+
 ## Project Structure
 
 ```

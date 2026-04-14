@@ -77,9 +77,29 @@
             }
         };
 
+        // Chart zoom/pan state storage
+        var chartZoomState = new Map();
+
+        // Custom Chart.js plugin for zoom/pan
+        var chartZoomPanPlugin = {
+            id: 'chartZoomPan',
+            afterInit: function(chart) {
+                var duration = state.telemetry ? state.telemetry.duration : 1;
+                chartZoomState.set(chart, {
+                    minTime: 0,
+                    maxTime: duration,
+                    isDragging: false,
+                    startX: 0,
+                    startMinTime: 0,
+                    lastUpdateTime: 0
+                });
+            }
+        };
+
         // Register custom plugins globally
         Chart.register(verticalCursorPlugin);
         Chart.register(lapLinesPlugin);
+        Chart.register(chartZoomPanPlugin);
 
         var state = {
             telemetry: null,
@@ -175,9 +195,12 @@
             console.log('Max Horizontal G:', maxHGFResult.value, 'at time:', maxHGFResult.timestamp);
 
             var html = '<div class="min-h-screen bg-slate-50">' +
-                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
+                '<div>' +
                 '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
                 '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '</div>' +
+                '<button id="reupload-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">Upload New Video</button>' +
                 '</header><main class="max-w-7xl mx-auto p-6 space-y-6">';
 
             // Video
@@ -263,6 +286,12 @@
                 deleteSectorBtn.addEventListener('click', deleteSelectedSector);
             }
 
+            // Re-upload button
+            var reuploadBtn = document.getElementById('reupload-btn');
+            if (reuploadBtn) {
+                reuploadBtn.addEventListener('click', resetToUpload);
+            }
+
             // Wait for DOM to settle then init
             setTimeout(function() {
                 initMap();
@@ -298,6 +327,50 @@
                     state.isProcessing = false;
                     render();
                 });
+        }
+
+        function resetToUpload() {
+            // Stop video playback
+            var video = document.getElementById('video-player');
+            if (video) {
+                video.pause();
+                video.src = '';
+            }
+            
+            // Clear telemetry and state
+            state.telemetry = null;
+            state.videoUrl = null;
+            state.sfLine = null;
+            state.sfLineLayer = null;
+            state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
+            state.sfMarkers = [];
+            state.lapResults = null;
+            state.selectedSectorIndex = null;
+            
+            // Clear sector lines and markers
+            state.sectorLines.forEach(function(layer) { state.map.removeLayer(layer); });
+            state.sectorLines = [];
+            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+            state.sectorLineLayers = [];
+            state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
+            state.sectorMarkers = [];
+            state.sectorPlacementMode = null;
+            
+            // Destroy charts
+            if (state.speedChart) {
+                state.speedChart.destroy();
+                state.speedChart = null;
+            }
+            if (state.gforceChart) {
+                state.gforceChart.destroy();
+                state.gforceChart = null;
+            }
+            
+            // Clear zoom state
+            chartZoomState.clear();
+            
+            // Show upload interface
+            render();
         }
 
         function toggleSfMode() {
@@ -749,6 +822,121 @@
             updateLapLabels();
         }
 
+        // Chart zoom/pan functions
+        function handleChartWheel(chart, e) {
+            e.preventDefault();
+            var zoomState = chartZoomState.get(chart);
+            if (!zoomState) return;
+            
+            var duration = state.telemetry ? state.telemetry.duration : 1;
+            var zoomRange = zoomState.maxTime - zoomState.minTime;
+            var chartArea = chart.chartArea;
+            var mouseX = e.offsetX;
+            
+            // Convert mouse X to time position
+            var timeAtMouse = zoomState.minTime + (mouseX - chartArea.left) / (chartArea.right - chartArea.left) * zoomRange;
+            
+            // Zoom direction: wheel up = zoom in, wheel down = zoom out
+            var zoomFactor = e.deltaY > 0 ? 1.1 : 0.9; // 10% zoom per tick
+            var newRange = zoomRange * zoomFactor;
+            
+            // Clamp to limits
+            newRange = Math.max(60, Math.min(duration, newRange));
+            
+            // Calculate new min/max centered on mouse position
+            var ratio = (timeAtMouse - zoomState.minTime) / zoomRange;
+            var newMinTime = timeAtMouse - ratio * newRange;
+            var newMaxTime = newMinTime + newRange;
+            
+            // Clamp to valid range
+            if (newMinTime < 0) {
+                newMinTime = 0;
+                newMaxTime = newRange;
+            }
+            if (newMaxTime > duration) {
+                newMaxTime = duration;
+                newMinTime = duration - newRange;
+            }
+            
+            // Update zoom state
+            zoomState.minTime = newMinTime;
+            zoomState.maxTime = newMaxTime;
+            
+            // Update chart options (not just scales)
+            chart.options.scales.x.min = newMinTime;
+            chart.options.scales.x.max = newMaxTime;
+            chart.update();
+            
+            // Update lap labels
+            updateLapLabels();
+        }
+
+        function handleChartMouseDown(chart, e) {
+            var zoomState = chartZoomState.get(chart);
+            if (!zoomState) return;
+            
+            zoomState.isDragging = true;
+            zoomState.startX = e.clientX;
+            zoomState.startMinTime = zoomState.minTime;
+        }
+
+        function handleChartMouseMove(chart, e) {
+            var zoomState = chartZoomState.get(chart);
+            if (!zoomState || !zoomState.isDragging) return;
+            
+            // Throttle to ~60fps
+            var now = Date.now();
+            if (now - zoomState.lastUpdateTime < 16) return;
+            zoomState.lastUpdateTime = now;
+            
+            var duration = state.telemetry ? state.telemetry.duration : 1;
+            var zoomRange = zoomState.maxTime - zoomState.minTime;
+            var chartArea = chart.chartArea;
+            var chartWidth = chartArea.right - chartArea.left;
+            
+            // Only pan if zoomed in
+            if (zoomRange >= duration) return;
+            
+            // Calculate drag delta in pixels
+            var deltaX = e.clientX - zoomState.startX;
+            
+            // Convert to time delta
+            var timePerPixel = zoomRange / chartWidth;
+            var timeDelta = deltaX * timePerPixel;
+            
+            // Calculate new min/max
+            var newMinTime = zoomState.startMinTime - timeDelta;
+            var newMaxTime = newMinTime + zoomRange;
+            
+            // Clamp to valid range
+            if (newMinTime < 0) {
+                newMinTime = 0;
+                newMaxTime = zoomRange;
+            }
+            if (newMaxTime > duration) {
+                newMaxTime = duration;
+                newMinTime = duration - zoomRange;
+            }
+            
+            // Update zoom state
+            zoomState.minTime = newMinTime;
+            zoomState.maxTime = newMaxTime;
+            
+            // Update chart options
+            chart.options.scales.x.min = newMinTime;
+            chart.options.scales.x.max = newMaxTime;
+            chart.update();
+            
+            // Update lap labels
+            updateLapLabels();
+        }
+
+        function handleChartMouseUp(chart) {
+            var zoomState = chartZoomState.get(chart);
+            if (!zoomState) return;
+            zoomState.isDragging = false;
+        }
+
         function initCharts() {
             if (!state.telemetry || !state.telemetry.data) return;
 
@@ -812,6 +1000,13 @@
                         }
                     }
                 });
+                
+                // Add zoom/pan event listeners to speed chart
+                speedCtx.addEventListener('wheel', function(e) { handleChartWheel(state.speedChart, e); });
+                speedCtx.addEventListener('mousedown', function(e) { handleChartMouseDown(state.speedChart, e); });
+                speedCtx.addEventListener('mousemove', function(e) { handleChartMouseMove(state.speedChart, e); });
+                speedCtx.addEventListener('mouseup', function() { handleChartMouseUp(state.speedChart); });
+                speedCtx.addEventListener('mouseleave', function() { handleChartMouseUp(state.speedChart); });
             }
 
             // G-Force
@@ -867,6 +1062,13 @@
                         }
                     }
                 });
+                
+                // Add zoom/pan event listeners to G-force chart
+                gCtx.addEventListener('wheel', function(e) { handleChartWheel(state.gforceChart, e); });
+                gCtx.addEventListener('mousedown', function(e) { handleChartMouseDown(state.gforceChart, e); });
+                gCtx.addEventListener('mousemove', function(e) { handleChartMouseMove(state.gforceChart, e); });
+                gCtx.addEventListener('mouseup', function() { handleChartMouseUp(state.gforceChart); });
+                gCtx.addEventListener('mouseleave', function() { handleChartMouseUp(state.gforceChart); });
             }
             
             updateLapLabels();
@@ -898,6 +1100,14 @@
                 container.style.height = '20px';
                 
                 laps.forEach(function(lap) {
+                    var zoomState = chartZoomState.get(chart);
+                    if (!zoomState) return;
+                    
+                    // Only show label if lap start is within visible range
+                    if (lap.startTime < zoomState.minTime || lap.startTime > zoomState.maxTime) {
+                        return;
+                    }
+                    
                     var xAxis = chart.scales.x;
                     var pixelX = xAxis.getPixelForValue(lap.startTime);
                     
