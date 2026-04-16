@@ -190,11 +190,19 @@ export function detectLaps(gpsData, sfLine, options = {}) {
             const duration = crossing.time - lapStart;
             
             if (duration >= cooldown) {
+                let maxSpeed = 0;
+                for (let j = 0; j < gpsData.length; j++) {
+                    const p = gpsData[j];
+                    if (p.t >= lapStart && p.t <= crossing.time) {
+                        if (p.speed > maxSpeed) maxSpeed = p.speed;
+                    }
+                }
                 laps.push({
                     lap: laps.length + 1,
                     startTime: lapStart,
                     endTime: crossing.time,
-                    duration: duration
+                    duration: duration,
+                    maxSpeed: maxSpeed
                 });
                 console.log(`  Crossing ${i}: u=${crossing.u.toFixed(3)}, time=${crossing.time.toFixed(2)} - LAP ${laps.length}: ${lapStart.toFixed(2)} to ${crossing.time.toFixed(2)} = ${duration.toFixed(2)}s`);
             } else {

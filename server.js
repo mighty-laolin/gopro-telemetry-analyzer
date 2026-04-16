@@ -14,6 +14,7 @@ app.use(express.static('public'));
 
 const PARSER_DIR = path.join(__dirname, 'gpmf-parser-main', 'demo');
 const PARSER_BIN = path.join(PARSER_DIR, 'gps_parser');
+const TRACKS_FILE = path.join(__dirname, 'tracks.json');
 
 function parseTelemetry(inputPath) {
     return new Promise((resolve, reject) => {
@@ -70,6 +71,41 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
+});
+
+app.get('/api/tracks', (req, res) => {
+    fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
+        if (err) {
+            if (err.code === 'ENOENT') return res.json({ tracks: [] });
+            return res.status(500).json({ error: 'Failed to read tracks' });
+        }
+        try {
+            const tracks = JSON.parse(data);
+            res.json(tracks);
+        } catch (e) {
+            res.json({ tracks: [] });
+        }
+    });
+});
+
+app.post('/api/tracks', (req, res) => {
+    const newTrack = req.body;
+    if (!newTrack || !newTrack.name || !newTrack.sfLine || !newTrack.sfLine.start || !newTrack.sfLine.end) {
+        return res.status(400).json({ error: 'Invalid track data' });
+    }
+    newTrack.id = Date.now().toString();
+
+    fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
+        let tracks = [];
+        if (!err && data) {
+            try { tracks = JSON.parse(data).tracks || []; } catch(e) {}
+        }
+        tracks.push(newTrack);
+        fs.writeFile(TRACKS_FILE, JSON.stringify({ tracks }, null, 2), (err) => {
+            if (err) return res.status(500).json({ error: 'Failed to save track' });
+            res.json({ success: true, track: newTrack });
+        });
+    });
 });
 
 const PORT = process.env.PORT || 3001;

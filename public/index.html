@@ -120,7 +120,9 @@
             sectorLineLayers: [],
             sectorMarkers: [],
             sectorPlacementMode: null,
-            selectedSectorIndex: null
+            selectedSectorIndex: null,
+            storedTracks: [],
+            selectedTrackId: null
         };
 
         // Exponential Moving Average (EMA) smoothing for G-force data
@@ -133,7 +135,125 @@
             for (var i = 1; i < data.length; i++) {
                 smoothed[i] = alpha * data[i] + (1 - alpha) * smoothed[i - 1];
             }
-            return smoothed;
+return smoothed;
+        }
+
+        function loadStoredTracks() {
+            return fetch('/api/tracks')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    state.storedTracks = data.tracks || [];
+                    console.log('Loaded stored tracks:', state.storedTracks.length);
+                })
+                .catch(function(err) {
+                    console.log('No stored tracks found, starting fresh');
+                    state.storedTracks = [];
+                });
+        }
+
+        function matchTrackToTelemetry() {
+            if (!state.telemetry || !state.telemetry.data || state.storedTracks.length === 0) {
+                return [];
+            }
+            var data = state.telemetry.data;
+            var lats = data.map(function(d) { return d.lat; });
+            var lons = data.map(function(d) { return d.lon; });
+            var minLat = Math.min.apply(null, lats);
+            var maxLat = Math.max.apply(null, lats);
+            var minLon = Math.min.apply(null, lons);
+            var maxLon = Math.max.apply(null, lons);
+            var margin = 0.01;
+            var matches = [];
+
+            for (var i = 0; i < state.storedTracks.length; i++) {
+                var track = state.storedTracks[i];
+                var s = track.sfLine.start;
+                var e = track.sfLine.end;
+                if (s.lat >= minLat - margin && s.lat <= maxLat + margin &&
+                    s.lon >= minLon - margin && s.lon <= maxLon + margin &&
+                    e.lat >= minLat - margin && e.lat <= maxLat + margin &&
+                    e.lon >= minLon - margin && e.lon <= maxLon + margin) {
+                    matches.push(track);
+                }
+            }
+            return matches;
+        }
+
+        function promptTrackNameAndSave() {
+            var trackName = prompt('Track name:', 'New Track');
+            if (!trackName) return;
+
+            var newTrack = {
+                name: trackName,
+                sfLine: {
+                    start: { lat: state.sfLine.start.lat, lon: state.sfLine.start.lon },
+                    end: { lat: state.sfLine.end.lat, lon: state.sfLine.end.lon }
+                }
+            };
+
+            fetch('/api/tracks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newTrack)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    state.selectedTrackId = data.track.id;
+                    return loadStoredTracks();
+                }
+            })
+            .then(function() {
+                updateSfButton();
+                updateSaveTrackButton();
+                render();
+            })
+            .catch(function(err) {
+                console.error('Failed to save track:', err);
+            });
+        }
+
+        function drawStoredSfLine() {
+            if (state.sfLineLayer) {
+                state.map.removeLayer(state.sfLineLayer);
+                state.sfLineLayer = null;
+            }
+            state.sfLineLayer = L.polyline([
+                [state.sfLine.start.lat, state.sfLine.start.lon],
+                [state.sfLine.end.lat, state.sfLine.end.lon]
+            ], { color: '#22c55e', weight: 4, opacity: 1 }).addTo(state.map);
+        }
+
+        function runLapDetection() {
+            state.directionOverride = null;
+            console.log('Calling detectLaps with sfLine:', state.sfLine);
+            try {
+                state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
+                console.log('detectLaps returned:', state.lapResults);
+
+                if (state.sectorLines.length > 0 && state.lapResults && state.lapResults.laps.length > 0) {
+                    var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                    state.lapResults.laps = sectorResult.laps;
+                    state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                    console.log('detectSectors returned:', state.lapResults);
+                }
+            } catch (e) {
+                console.error('detectLaps error:', e);
+            }
+
+            updateSfButton();
+            updateLapResults();
+            updateLapLabels();
+        }
+
+        function buildTrackOptions() {
+            var html = '';
+            for (var i = 0; i < state.storedTracks.length; i++) {
+                var track = state.storedTracks[i];
+                var selected = track.id === state.selectedTrackId ? ' selected' : '';
+                html += '<option value="' + track.id + '"' + selected + '>' + track.name + '</option>';
+            }
+            return html;
         }
 
         // Render
@@ -227,6 +347,17 @@
                 '<div class="flex items-center gap-2"><span class="text-2xl">🏔️</span><span id="alt-display" class="font-bold text-lg">0m</span></div>' +
                 '</div></div>';
 
+            // Track name
+            var trackName = 'Unknown Track';
+            if (state.selectedTrackId) {
+                var track = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
+                if (track) trackName = track.name;
+            }
+            html += '<div class="bg-white rounded-lg shadow p-4 text-center mb-4">' +
+                '<p class="text-slate-500 text-sm">Track</p>' +
+                '<p class="text-2xl font-bold text-black">' + trackName + '</p>' +
+                '</div>';
+
             // Stats
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4">' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
@@ -246,8 +377,13 @@
             html += '<div class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Track Map</h2>' +
-                '<div class="flex gap-2">' +
+                '<div class="flex gap-2 items-center">' +
+                '<select id="track-selector" class="px-3 py-2 rounded-lg border border-slate-300 text-sm">' +
+                '<option value="">-- Select Track --</option>' +
+                buildTrackOptions() +
+                '</select>' +
                 '<button id="sf-btn" class="px-4 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700">Set S/F Line</button>' +
+                '<button id="save-track-btn" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 hidden">Save Track</button>' +
                 '<button id="sector-btn" class="px-4 py-2 rounded-lg text-white bg-orange-500 hover:bg-orange-600">Add Sector</button>' +
                 '<button id="delete-sector-btn" class="px-4 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 hidden">Delete Sector</button>' +
                 '</div>' +
@@ -292,6 +428,49 @@
                 reuploadBtn.addEventListener('click', resetToUpload);
             }
 
+            // Track selector
+            var trackSelector = document.getElementById('track-selector');
+            if (trackSelector) {
+                trackSelector.addEventListener('change', function(e) {
+                    var trackId = e.target.value;
+                    if (!trackId) {
+                        state.selectedTrackId = null;
+                        state.sfLine = null;
+                        if (state.sfLineLayer) {
+                            state.map.removeLayer(state.sfLineLayer);
+                            state.sfLineLayer = null;
+                        }
+                        state.lapResults = null;
+                        updateLapResults();
+                        updateLapLabels();
+                        updateSfButton();
+                        updateSaveTrackButton();
+                        render();
+                        return;
+                    }
+                    var track = state.storedTracks.find(function(t) { return t.id === trackId; });
+                    if (track) {
+                        state.selectedTrackId = track.id;
+                        state.sfLine = {
+                            start: { lat: track.sfLine.start.lat, lon: track.sfLine.start.lon },
+                            end: { lat: track.sfLine.end.lat, lon: track.sfLine.end.lon }
+                        };
+                        drawStoredSfLine();
+                        runLapDetection();
+                        updateSaveTrackButton();
+                        render();
+                    }
+                });
+            }
+
+            // Save Track button
+            var saveTrackBtn = document.getElementById('save-track-btn');
+            if (saveTrackBtn) {
+                saveTrackBtn.addEventListener('click', function() {
+                    promptTrackNameAndSave();
+                });
+            }
+
             // Wait for DOM to settle then init
             setTimeout(function() {
                 initMap();
@@ -309,7 +488,9 @@
             state.telemetry = null;
             state.videoUrl = URL.createObjectURL(file);
             state.sfLine = null;
+            state.sfLineLayer = null;
             state.lapResults = null;
+            state.selectedTrackId = null;
             render();
 
             var fd = new FormData();
@@ -319,6 +500,17 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     state.telemetry = data;
+                    var matches = matchTrackToTelemetry();
+                    if (matches.length === 1) {
+                        state.sfLine = {
+                            start: matches[0].sfLine.start,
+                            end: matches[0].sfLine.end
+                        };
+                        state.selectedTrackId = matches[0].id;
+                    } else if (matches.length > 1) {
+                        console.warn('Multiple tracks matched - giving up on auto-load');
+                        state.selectedTrackId = null;
+                    }
                 })
                 .catch(function(err) {
                     state.error = err.message;
@@ -517,8 +709,9 @@
         function updateSfButton() {
             var btn = document.getElementById('sf-btn');
             if (!btn) return;
-            
+
             var btnClass = 'px-4 py-2 rounded-lg text-white ';
+
             if (state.sfLine && state.sfLine.__placing === 'first') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
                 btn.textContent = 'Click 1st point';
@@ -534,7 +727,15 @@
             }
             btn.className = btnClass;
         }
-        
+
+        function updateSaveTrackButton() {
+            var btn = document.getElementById('save-track-btn');
+            if (!btn) return;
+
+            var show = state.sfLine && state.sfLine.start && state.sfLine.end && !state.selectedTrackId;
+            btn.classList.toggle('hidden', !show);
+        }
+
         function initMap() {
             var mapEl = document.getElementById('map');
             if (!mapEl || !state.telemetry) return;
@@ -553,13 +754,19 @@
             var center = [(Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2, 
                          (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2];
 
-            state.map = L.map('map').setView(center, 14);
+            state.map = L.map('map').setView(center, 17);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(state.map);
 
             var positions = data.map(function(d) { return [d.lat, d.lon]; });
             L.polyline(positions, { color: '#2563eb', weight: 3 }).addTo(state.map);
+
+            if (state.sfLine && state.sfLine.start && state.sfLine.end) {
+                drawStoredSfLine();
+                runLapDetection();
+                updateSaveTrackButton();
+            }
 
             state.map.on('click', function(e) {
                 var clickPos = { lat: e.latlng.lat, lon: e.latlng.lng };
@@ -618,39 +825,24 @@
                     }
                     
                     state.sfLine.__placing = null;
-                    
+                    state.selectedTrackId = null;
+
                     var marker2 = L.circleMarker([clickPos.lat, clickPos.lon], {
                         radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1
                     }).addTo(state.map);
                     state.sfMarkers.push(marker2);
-                    
+
                     state.sfLineLayer = L.polyline([
                         [state.sfLine.start.lat, state.sfLine.start.lon],
                         [state.sfLine.end.lat, state.sfLine.end.lon]
                     ], { color: '#22c55e', weight: 4, opacity: 1 }).addTo(state.map);
-                    
+
                     state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });
                     state.sfMarkers = [];
-                    
-                    state.directionOverride = null;
-                    console.log('Calling detectLaps with sfLine:', state.sfLine);
-                    try {
-                        state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
-                        console.log('detectLaps returned:', state.lapResults);
-                        
-                        if (state.sectorLines.length > 0 && state.lapResults && state.lapResults.laps.length > 0) {
-                            var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
-                            state.lapResults.laps = sectorResult.laps;
-                            state.lapResults.sectorIndices = sectorResult.sectorIndices;
-                            console.log('detectSectors returned:', state.lapResults);
-                        }
-                    } catch (e) {
-                        console.error('detectLaps error:', e);
-                    }
-                    
-                    updateSfButton();
-                    updateLapResults();
-                    updateLapLabels();
+
+                    runLapDetection();
+                    updateSaveTrackButton();
+                    render();
                 }
             }
             
@@ -763,7 +955,7 @@
                 dirBtnHtml +
                 '</div>' +
                 '<p class="text-sm text-slate-500 mb-2">Direction: ' + (displayDir || 'unknown') + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
-                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th></tr></thead><tbody>';
+                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th><th class="py-2">Max Speed</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
@@ -783,7 +975,7 @@
                                      '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
                 }
                 
-                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td></tr>';
+                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td></tr>';
             }
             html += '</tbody></table></div>';
             
@@ -1323,6 +1515,7 @@
         }
 
         // Start
+        loadStoredTracks();
         render();
     })();
     </script>
