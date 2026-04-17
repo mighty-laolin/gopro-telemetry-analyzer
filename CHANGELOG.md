@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Sticky header with navigation pill buttons (Video, Stats, Speed Chart, G-Force Chart, Map, Lap Times)
+- Smooth scroll navigation with scroll-padding-top for header clearance
+- `.leaflet-container { z-index: 1 }` force header above Leaflet map tiles
+
+### Changed
+- Header padding reduced from py-4 to py-3
+- Video overlay z-index reduced from 100 to 40 to stay below header
+- Leaflet map container separated (map-container) from section wrapper to prevent Leaflet from taking over controls
+- Canvas IDs renamed to avoid conflicts with section IDs (speed-chart-canvas, gforce-chart-canvas)
+- scroll-padding-top increased from 100px to 120px for better header clearance
+
+### Fixed
+- Track name not updating after manual track selection
+- Lap times table ID mismatch (lap-results vs lap-times)
+- Sector times persisting when switching between tracks (now clears sectorLines and sectorLineLayers)
+- Map tiles appearing above header when scrolling (added .sticky { z-index: 9999 !important })
+- Dashboard panel overlap with header when using nav buttons
+
 ## [v0.5] - 2026-04-16
 
 ### Added

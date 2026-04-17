@@ -19,7 +19,10 @@
     <style>
         html {
             scroll-behavior: smooth;
-            scroll-padding-top: 100px;
+            scroll-padding-top: 120px;
+        }
+        .sticky {
+            z-index: 9999 !important;
         }
     </style>
 </head>
@@ -458,6 +461,11 @@ return smoothed;
                             state.sfLineLayer = null;
                         }
                         state.lapResults = null;
+                        state.sectorLines = [];
+                        if (state.sectorLineLayers) {
+                            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+                            state.sectorLineLayers = [];
+                        }
                         updateLapResults();
                         updateLapLabels();
                         updateSfButton();
@@ -472,6 +480,12 @@ return smoothed;
                             start: { lat: track.sfLine.start.lat, lon: track.sfLine.start.lon },
                             end: { lat: track.sfLine.end.lat, lon: track.sfLine.end.lon }
                         };
+                        state.lapResults = null;
+                        state.sectorLines = [];
+                        if (state.sectorLineLayers) {
+                            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+                            state.sectorLineLayers = [];
+                        }
                         drawStoredSfLine();
                         runLapDetection();
                         updateSaveTrackButton();
