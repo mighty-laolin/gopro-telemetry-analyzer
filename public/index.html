@@ -16,6 +16,12 @@
         window.calculateLineLength = calculateLineLength;
         window.computeMaxHorizontalGForce = computeMaxHorizontalGForce;
     </script>
+    <style>
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 100px;
+        }
+    </style>
 </head>
 <body>
     <div id="app"></div>
@@ -315,20 +321,31 @@ return smoothed;
             console.log('Max Horizontal G:', maxHGFResult.value, 'at time:', maxHGFResult.timestamp);
 
             var html = '<div class="min-h-screen bg-slate-50">' +
-                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
+                '<div class="sticky top-0 z-50">' +
+                '<header class="bg-blue-600 text-white py-3 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
                 '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
                 '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
                 '</div>' +
                 '<button id="reupload-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">Upload New Video</button>' +
-                '</header><main class="max-w-7xl mx-auto p-6 space-y-6">';
+                '</header>' +
+                '<nav class="bg-slate-100 px-4 py-2 flex gap-2 overflow-x-auto">' +
+                '<a href="#video" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Video</a>' +
+                '<a href="#stats" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Stats</a>' +
+                '<a href="#speed-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Speed Chart</a>' +
+                '<a href="#gforce-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">G-Force Chart</a>' +
+                '<a href="#map" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Map</a>' +
+                '<a href="#lap-times" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Lap Times</a>' +
+                '</nav>' +
+                '</div>' +
+                '<main class="max-w-7xl mx-auto p-6 space-y-6">';
 
             // Video
-            html += '<div class="bg-white rounded-lg shadow-md p-4">' +
+            html += '<div id="video" class="bg-white rounded-lg shadow-md p-4 mb-6">' +
                 '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
                 '<div class="relative" style="max-width:100%">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
-                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:100;font-size:16px;min-width:290px">' +
+                '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:40;font-size:16px;min-width:290px">' +
                 '<div style="display:flex;align-items:center;gap:12px;white-space:nowrap">' +
                 '<span style="min-width:60px">LAP <span id="current-lap-num" style="font-weight:bold">-</span></span>' +
                 '<span id="current-lap-time" style="font-size:28px;font-weight:bold;min-width:90px">--.--s</span>' +
@@ -353,13 +370,13 @@ return smoothed;
                 var track = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
                 if (track) trackName = track.name;
             }
-            html += '<div class="bg-white rounded-lg shadow p-4 text-center mb-4">' +
+            html += '<div id="stats" class="bg-white rounded-lg shadow p-4 text-center mb-6">' +
                 '<p class="text-slate-500 text-sm">Track</p>' +
                 '<p class="text-2xl font-bold text-black">' + trackName + '</p>' +
                 '</div>';
 
             // Stats
-            html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4">' +
+            html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
@@ -368,13 +385,13 @@ return smoothed;
                 '</div>';
 
             // Speed Chart
-            html += '<div class="bg-white rounded-lg shadow p-4 relative"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
+            html += '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart-canvas" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // G-Force Chart
-            html += '<div class="bg-white rounded-lg shadow p-4 relative"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
+            html += '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart-canvas" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // Map
-            html += '<div class="bg-white rounded-lg shadow p-4">' +
+            html += '<div id="map" class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Track Map</h2>' +
                 '<div class="flex gap-2 items-center">' +
@@ -388,7 +405,7 @@ return smoothed;
                 '<button id="delete-sector-btn" class="px-4 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 hidden">Delete Sector</button>' +
                 '</div>' +
                 '</div>' +
-                '<div id="map" class="h-96 rounded-lg"></div></div>';
+                '<div id="map-container" class="h-96 rounded-lg"></div></div>';
 
             html += '<div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + t.gpsPoints + '</strong> telemetry points</p></div>';
             html += '</main></div>';
@@ -754,7 +771,7 @@ return smoothed;
             var center = [(Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2, 
                          (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2];
 
-            state.map = L.map('map').setView(center, 17);
+            state.map = L.map('map-container').setView(center, 17);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(state.map);
@@ -933,7 +950,7 @@ return smoothed;
 
         function updateLapResults() {
             var lr = state.lapResults;
-            var existing = document.getElementById('lap-results');
+            var existing = document.getElementById('lap-times');
             if (existing) existing.remove();
             
             if (!lr || !lr.laps || lr.laps.length === 0) return;
@@ -949,7 +966,7 @@ return smoothed;
                 sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th><th class="py-2">S3</th>';
             }
             
-            var html = '<div id="lap-results" class="bg-white rounded-lg shadow p-4">' +
+            var html = '<div id="lap-times" class="bg-white rounded-lg shadow p-4 mb-6">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 class="text-lg font-semibold">Lap Times</h2>' +
                 dirBtnHtml +
@@ -1135,7 +1152,7 @@ return smoothed;
             var data = state.telemetry.data;
 
             // Speed
-            var speedCtx = document.getElementById('speed-chart');
+            var speedCtx = document.getElementById('speed-chart-canvas');
             if (speedCtx && speedCtx.parentElement) {
                 var maxSpeed = Math.max.apply(null, data.map(function(d) { return d.speed; }));
                 var speedMax = Math.ceil(maxSpeed / 10) * 10 + 10;
@@ -1202,7 +1219,7 @@ return smoothed;
             }
 
             // G-Force
-            var gCtx = document.getElementById('gforce-chart');
+            var gCtx = document.getElementById('gforce-chart-canvas');
             if (gCtx && gCtx.parentElement) {
                 var rawGy = data.map(function(d) { return d.gy; });
                 var rawGz = data.map(function(d) { return d.gz; });
