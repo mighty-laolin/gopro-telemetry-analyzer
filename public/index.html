@@ -360,11 +360,10 @@ return smoothed;
                 '<span id="s3-container" style="min-width:80px">S3: <span id="s3-time">--.--</span>s</span>' +
                 '</div>' +
                 '</div>' +
-                '<div class="flex justify-center gap-6 py-2 px-4 bg-slate-100 rounded-lg mt-3">' +
-                '<div class="flex items-center gap-2"><span class="text-2xl">📍</span><span id="speed-display" class="font-bold text-lg">0 km/h</span></div>' +
-                '<div class="flex items-center gap-2 text-green-600"><span class="font-bold">LONG</span><span id="gy-display" class="font-bold text-lg">0.00</span><span class="text-xs">G</span></div>' +
-                '<div class="flex items-center gap-2 text-red-600"><span class="font-bold">LAT</span><span id="gx-display" class="font-bold text-lg">0.00</span><span class="text-xs">G</span></div>' +
-                '<div class="flex items-center gap-2"><span class="text-2xl">🏔️</span><span id="alt-display" class="font-bold text-lg">0m</span></div>' +
+                '<div id="telemetry-overlay" style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:40;font-size:14px;display:flex;gap:16px;white-space:nowrap">' +
+                '<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span id="speed-display" class="font-bold">0 km/h</span></div>' +
+                '<div style="display:flex;align-items:center;gap:6px;color:#22c55e"><span>LONG</span><span id="gy-display" class="font-bold">0.00</span><span>G</span></div>' +
+                '<div style="display:flex;align-items:center;gap:6px;color:#ef4444"><span>LAT</span><span id="gx-display" class="font-bold">0.00</span><span>G</span></div>' +
                 '</div></div>';
 
             // Track name
@@ -986,7 +985,7 @@ return smoothed;
                 dirBtnHtml +
                 '</div>' +
                 '<p class="text-sm text-slate-500 mb-2">Direction: ' + (displayDir || 'unknown') + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
-                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th><th class="py-2">Max Speed</th></tr></thead><tbody>';
+                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th><th class="py-2">Max Speed</th><th class="py-2">Min Speed</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
@@ -1006,7 +1005,7 @@ return smoothed;
                                      '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
                 }
                 
-                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td></tr>';
+                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td><td class="py-2">' + lap.minSpeed.toFixed(1) + ' km/h</td></tr>';
             }
             html += '</tbody></table></div>';
             
