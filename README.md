@@ -6,7 +6,7 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 
 - **Video Playback**: Watch your GoPro video while viewing telemetry
 - **Speed Chart**: Speed vs time with vertical cursor sync
-- **G-Force Chart**: Longitudinal (acceleration/braking) and lateral (cornering) G-forces
+- **G-Force Chart**: Longitudinal (acceleration/braking, red) and lateral (cornering, green) G-forces
 - **Track Map**: GPS track overlay on OpenStreetMap
 - **Lap Detection**: Automatic lap time calculation with S/F line placement
 - **Sector Timing**: Up to 3 sectors with per-sector time tracking
@@ -14,7 +14,9 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 - **Lap Timer Overlay**: Live lap time, best lap, and sector times on video
 - **Lap Labels on Charts**: Visual lap boundaries with clickable labels to jump to lap start
 - **Track Library**: Store and auto-load S/F lines for known tracks
-- **Max Speed per Lap**: Lap time table shows top speed reached in each lap
+- **Max/Min Speed per Lap**: Lap time table shows top and bottom speed reached in each lap
+- **Double-Click to Seek**: Double-click anywhere on speed or G-force chart to seek video to that timestamp
+- **Chinese Language Support**: Toggle between English and Chinese (中文) via button in header
 
 ## Requirements
 
@@ -115,7 +117,14 @@ http://localhost:3001
     - Lap labels automatically hide when outside visible range
 
 13. **Upload New Video**:
-    - Click "Upload New Video" button in the header to reset and upload a new video
+     - Click "Upload New Video" button in the header to reset and upload a new video
+
+14. **Language Toggle**:
+     - Click the "切换语言" button (top-right in header) to switch between English and Chinese
+     - All UI text updates immediately without page refresh
+     - Chart labels and axis titles also update
+     - Overlays (lap timer, telemetry) remain in English
+     - Language setting persists across track selections within the same session
 
 ## Project Structure
 
@@ -146,7 +155,9 @@ http://localhost:3001
 - Lap detection uses 20m S/F line with GPS track crossing detection
 - Sector lines are ordered by time from S/F (shortest time = S1)
 - Maximum 2 sector lines (3 total sectors per lap)
-- G-force display: gy = longitudinal (green), gz = lateral (red)
+- G-force display: gz = longitudinal (red), gy = lateral (green) - also reflected in chart and overlay colors
 - Max G-force shown is horizontal G-force = sqrt(gy² + gz²) (excludes vertical)
 - Lap labels on charts: click to seek video to lap start time
 - Track auto-detection: matches stored S/F lines within ~1km margin; if multiple tracks match, no auto-detection occurs
+- Double-click on charts: video jumps to clicked timestamp
+- Language toggle: click "切换语言" button in header to switch between English and Chinese
