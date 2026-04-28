@@ -131,8 +131,132 @@
             sectorPlacementMode: null,
             selectedSectorIndex: null,
             storedTracks: [],
-            selectedTrackId: null
+            selectedTrackId: null,
+            language: 'en'
         };
+
+        // Translations
+        var translations = {
+            en: {
+                'app.title': 'GoPro Telemetry Analyzer',
+                'app.subtitle': 'Extract GPS & telemetry from GoPro videos',
+                'nav.uploadNew': 'Upload New Video',
+                'nav.video': 'Video',
+                'nav.stats': 'Stats',
+                'nav.speedChart': 'Speed Chart',
+                'nav.gforceChart': 'G-Force Chart',
+                'nav.map': 'Map',
+                'nav.lapTimes': 'Lap Times',
+                'video.title': 'Video Playback',
+                'stats.track': 'Track',
+                'stats.unknownTrack': 'Unknown Track',
+                'stats.maxSpeed': 'Max Speed',
+                'stats.avgSpeed': 'Avg Speed',
+                'stats.maxGforce': 'Max G-Force',
+                'stats.distance': 'Distance',
+                'stats.duration': 'Duration',
+                'charts.speedVsTime': 'Speed vs Time',
+                'charts.gforceVsTime': 'G-Force vs Time',
+                'charts.speed': 'Speed',
+                'charts.longitudinal': 'Longitudinal',
+                'charts.lateral': 'Lateral',
+                'charts.time': 'Time',
+                'charts.kmh': 'km/h',
+                'charts.g': 'G',
+                'map.title': 'Track Map',
+                'map.selectTrack': '-- Select Track --',
+                'map.setSfLine': 'Set S/F Line',
+                'map.moveSfLine': 'Move S/F Line',
+                'map.saveTrack': 'Save Track',
+                'map.addSector': 'Add Sector',
+                'map.deleteSector': 'Delete Sector',
+                'map.maxSectors': 'Max Sectors',
+                'map.click1stPoint': 'Click 1st point',
+                'map.click2ndPoint': 'Click 2nd point',
+                'lapTimes.title': 'Lap Times',
+                'lapTimes.swapDir': 'Swap direction',
+                'lapTimes.direction': 'Direction:',
+                'lapTimes.best': 'Best:',
+                'lapTimes.lap': 'Lap',
+                'lapTimes.time': 'Time',
+                'lapTimes.delta': 'Delta',
+                'lapTimes.maxSpeed': 'Max Speed',
+                'lapTimes.minSpeed': 'Min Speed',
+                'msg.sfLineTooLong': 'S/F line cannot be longer than 20 meters. Please set a shorter line.',
+                'msg.sectorLineTooLong': 'Sector line cannot be longer than 20 meters. Please set a shorter line.',
+                'msg.extracted': 'Extracted',
+                'msg.telemetryPoints': 'telemetry points',
+                'msg.trackName': 'Track name:',
+                'msg.newTrack': 'New Track',
+                'upload.dropHere': 'Drop your GoPro MP4 file here',
+                'upload.orClick': 'or click to browse',
+                'processing.extracting': 'Extracting telemetry data...',
+                'error.title': 'Error',
+                'lang.toggle': '中文'
+            },
+            zh: {
+                'app.title': 'GoPro 遥测分析器',
+                'app.subtitle': '从 GoPro 视频中提取 GPS 和遥测数据',
+                'nav.uploadNew': '上传新视频',
+                'nav.video': '视频',
+                'nav.stats': '统计',
+                'nav.speedChart': '速度图表',
+                'nav.gforceChart': 'G值图表',
+                'nav.map': '赛道地图',
+                'nav.lapTimes': '圈速',
+                'video.title': '视频播放',
+                'stats.track': '赛道',
+                'stats.unknownTrack': '未知赛道',
+                'stats.maxSpeed': '最高速度',
+                'stats.avgSpeed': '平均速度',
+                'stats.maxGforce': '最大G力',
+                'stats.distance': '距离',
+                'stats.duration': '时长',
+                'charts.speedVsTime': '速度 vs 时间',
+                'charts.gforceVsTime': 'G值图表',
+                'charts.speed': '速度',
+                'charts.longitudinal': '纵向',
+                'charts.lateral': '横向',
+                'charts.time': '时间',
+                'charts.kmh': 'km/h',
+                'charts.g': 'G',
+                'map.title': '赛道地图',
+                'map.selectTrack': '-- 选择赛道 --',
+                'map.setSfLine': '设置起终点线',
+                'map.moveSfLine': '移动起终点线',
+                'map.saveTrack': '保存赛道',
+                'map.addSector': '添加分段',
+                'map.deleteSector': '删除分段',
+                'map.maxSectors': '已达最大分段数',
+                'map.click1stPoint': '点击第一个点',
+                'map.click2ndPoint': '点击第二个点',
+                'lapTimes.title': '圈速',
+                'lapTimes.swapDir': '切换方向',
+                'lapTimes.direction': '方向:',
+                'lapTimes.best': '最佳:',
+                'lapTimes.lap': '圈',
+                'lapTimes.time': '时间',
+                'lapTimes.delta': '差值',
+                'lapTimes.maxSpeed': '最高速度',
+                'lapTimes.minSpeed': '最低速度',
+                'msg.sfLineTooLong': '起终点线不能超过20米，请设置更短的线。',
+                'msg.sectorLineTooLong': '分段线不能超过20米，请设置更短的线。',
+                'msg.extracted': '已提取',
+                'msg.telemetryPoints': '个遥测点',
+                'msg.trackName': '赛道名称:',
+                'msg.newTrack': '新赛道',
+                'upload.dropHere': '将 GoPro MP4 文件拖放到此处',
+                'upload.orClick': '或点击浏览',
+                'processing.extracting': '正在提取遥测数据...',
+                'error.title': '错误',
+                'lang.toggle': 'EN'
+            }
+        };
+
+        function t(key) {
+            var lang = state.language || 'en';
+            return translations[lang][key] || translations['en'][key] || key;
+        }
 
         // Exponential Moving Average (EMA) smoothing for G-force data
         // alpha = smoothing factor (0-1), higher = less smoothing, lower = more smoothing
@@ -216,6 +340,7 @@ return smoothed;
                 updateSfButton();
                 updateSaveTrackButton();
                 render();
+                updateAllText();
             })
             .catch(function(err) {
                 console.error('Failed to save track:', err);
@@ -327,25 +452,28 @@ return smoothed;
                 '<div class="sticky top-0 z-50">' +
                 '<header class="bg-blue-600 text-white py-3 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
-                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
-                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '<h1 id="header-title" class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
+                '<p id="header-subtitle" class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
                 '</div>' +
+                '<div class="flex items-center gap-3">' +
+                '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">切换语言</button>' +
                 '<button id="reupload-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">Upload New Video</button>' +
+                '</div>' +
                 '</header>' +
                 '<nav class="bg-slate-100 px-4 py-2 flex gap-2 overflow-x-auto">' +
-                '<a href="#video" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Video</a>' +
-                '<a href="#stats" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Stats</a>' +
-                '<a href="#speed-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Speed Chart</a>' +
-                '<a href="#gforce-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">G-Force Chart</a>' +
-                '<a href="#map" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Map</a>' +
-                '<a href="#lap-times" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Lap Times</a>' +
+                '<a id="nav-video" href="#video" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Video</a>' +
+                '<a id="nav-stats" href="#stats" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Stats</a>' +
+                '<a id="nav-speedChart" href="#speed-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Speed Chart</a>' +
+                '<a id="nav-gforceChart" href="#gforce-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">G-Force Chart</a>' +
+                '<a id="nav-map" href="#map" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Map</a>' +
+                '<a id="nav-lapTimes" href="#lap-times" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Lap Times</a>' +
                 '</nav>' +
                 '</div>' +
                 '<main class="max-w-7xl mx-auto p-6 space-y-6">';
 
             // Video
             html += '<div id="video" class="bg-white rounded-lg shadow-md p-4 mb-6">' +
-                '<h2 class="text-lg font-semibold mb-3">Video Playback</h2>' +
+                '<h2 id="video-title" class="text-lg font-semibold mb-3">Video Playback</h2>' +
                 '<div class="relative" style="max-width:100%">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
                 '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:40;font-size:16px;min-width:290px">' +
@@ -362,8 +490,8 @@ return smoothed;
                 '</div>' +
                 '<div id="telemetry-overlay" style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:40;font-size:14px;display:flex;gap:16px;white-space:nowrap">' +
                 '<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span id="speed-display" class="font-bold">0 km/h</span></div>' +
-                '<div style="display:flex;align-items:center;gap:6px;color:#22c55e"><span>LONG</span><span id="gy-display" class="font-bold">0.00</span><span>G</span></div>' +
-                '<div style="display:flex;align-items:center;gap:6px;color:#ef4444"><span>LAT</span><span id="gx-display" class="font-bold">0.00</span><span>G</span></div>' +
+                '<div style="display:flex;align-items:center;gap:6px;color:#ef4444"><span>LONG</span><span id="gy-display" class="font-bold">0.00</span><span>G</span></div>' +
+                '<div style="display:flex;align-items:center;gap:6px;color:#22c55e"><span>LAT</span><span id="gx-display" class="font-bold">0.00</span><span>G</span></div>' +
                 '</div></div>';
 
             // Track name
@@ -373,32 +501,32 @@ return smoothed;
                 if (track) trackName = track.name;
             }
             html += '<div id="stats" class="bg-white rounded-lg shadow p-4 text-center mb-6">' +
-                '<p class="text-slate-500 text-sm">Track</p>' +
-                '<p class="text-2xl font-bold text-black">' + trackName + '</p>' +
+                '<p id="stats-track-label" class="text-slate-500 text-sm">Track</p>' +
+                '<p id="stats-track-name" class="text-2xl font-bold text-black">' + trackName + '</p>' +
                 '</div>';
 
             // Stats
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + t.totalDistance.toFixed(2) + ' km</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + t.duration.toFixed(0) + 's</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxSpeed" class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-avgSpeed" class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxGforce" class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-distance" class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + t.totalDistance.toFixed(2) + ' km</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-duration" class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + t.duration.toFixed(0) + 's</p></div>' +
                 '</div>';
 
             // Speed Chart
-            html += '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart-canvas" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
+            html += '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 id="speed-chart-title" class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart-canvas" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // G-Force Chart
-            html += '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart-canvas" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
+            html += '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 id="gforce-chart-title" class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart-canvas" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
 
             // Map
             html += '<div id="map" class="bg-white rounded-lg shadow p-4">' +
                 '<div class="flex justify-between items-center mb-3">' +
-                '<h2 class="text-lg font-semibold">Track Map</h2>' +
+                '<h2 id="map-title" class="text-lg font-semibold">Track Map</h2>' +
                 '<div class="flex gap-2 items-center">' +
                 '<select id="track-selector" class="px-3 py-2 rounded-lg border border-slate-300 text-sm">' +
-                '<option value="">-- Select Track --</option>' +
+                '<option id="track-selector-option" value="">-- Select Track --</option>' +
                 buildTrackOptions() +
                 '</select>' +
                 '<button id="sf-btn" class="px-4 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700">Set S/F Line</button>' +
@@ -409,7 +537,7 @@ return smoothed;
                 '</div>' +
                 '<div id="map-container" class="h-96 rounded-lg"></div></div>';
 
-            html += '<div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + t.gpsPoints + '</strong> telemetry points</p></div>';
+            html += '<div id="telemetry-msg" class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + t.gpsPoints + '</strong> telemetry points</p></div>';
             html += '</main></div>';
 
             return html;
@@ -447,6 +575,28 @@ return smoothed;
                 reuploadBtn.addEventListener('click', resetToUpload);
             }
 
+            // Language toggle
+            var langToggleBtn = document.getElementById('lang-toggle-btn');
+            if (langToggleBtn) {
+                langToggleBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    state.language = state.language === 'en' ? 'zh' : 'en';
+                    updateAllText();
+
+                    // Rerender charts with new labels
+                    if (state.speedChart) {
+                        state.speedChart.destroy();
+                        state.speedChart = null;
+                    }
+                    if (state.gforceChart) {
+                        state.gforceChart.destroy();
+                        state.gforceChart = null;
+                    }
+                    initCharts();
+                    updateLapResults();
+                });
+            }
+
             // Track selector
             var trackSelector = document.getElementById('track-selector');
             if (trackSelector) {
@@ -470,6 +620,7 @@ return smoothed;
                         updateSfButton();
                         updateSaveTrackButton();
                         render();
+                        updateAllText();
                         return;
                     }
                     var track = state.storedTracks.find(function(t) { return t.id === trackId; });
@@ -489,6 +640,7 @@ return smoothed;
                         runLapDetection();
                         updateSaveTrackButton();
                         render();
+                        updateAllText();
                     }
                 });
             }
@@ -509,6 +661,75 @@ return smoothed;
             }, 50);
         }
 
+        function updateAllText() {
+            if (!state) return;
+            var lang = state.language || 'en';
+
+            var toggleBtn = document.getElementById('lang-toggle-btn');
+            if (toggleBtn) toggleBtn.textContent = lang === 'zh' ? 'Switch Language' : '切换语言';
+
+            var headerTitle = document.getElementById('header-title');
+            if (headerTitle) headerTitle.textContent = t('app.title');
+            var headerSubtitle = document.getElementById('header-subtitle');
+            if (headerSubtitle) headerSubtitle.textContent = t('app.subtitle');
+
+            var reuploadBtn = document.getElementById('reupload-btn');
+            if (reuploadBtn) reuploadBtn.textContent = t('nav.uploadNew');
+
+            var navVideo = document.getElementById('nav-video');
+            if (navVideo) navVideo.textContent = t('nav.video');
+            var navStats = document.getElementById('nav-stats');
+            if (navStats) navStats.textContent = t('nav.stats');
+            var navSpeedChart = document.getElementById('nav-speedChart');
+            if (navSpeedChart) navSpeedChart.textContent = t('nav.speedChart');
+            var navGforceChart = document.getElementById('nav-gforceChart');
+            if (navGforceChart) navGforceChart.textContent = t('nav.gforceChart');
+            var navMap = document.getElementById('nav-map');
+            if (navMap) navMap.textContent = t('nav.map');
+            var navLapTimes = document.getElementById('nav-lapTimes');
+            if (navLapTimes) navLapTimes.textContent = t('nav.lapTimes');
+
+            var videoTitle = document.getElementById('video-title');
+            if (videoTitle) videoTitle.textContent = t('video.title');
+
+            var statsTrackLabel = document.getElementById('stats-track-label');
+            if (statsTrackLabel) statsTrackLabel.textContent = t('stats.track');
+            var statMaxSpeed = document.getElementById('stat-maxSpeed');
+            if (statMaxSpeed) statMaxSpeed.textContent = t('stats.maxSpeed');
+            var statAvgSpeed = document.getElementById('stat-avgSpeed');
+            if (statAvgSpeed) statAvgSpeed.textContent = t('stats.avgSpeed');
+            var statMaxGforce = document.getElementById('stat-maxGforce');
+            if (statMaxGforce) statMaxGforce.textContent = t('stats.maxGforce');
+            var statDistance = document.getElementById('stat-distance');
+            if (statDistance) statDistance.textContent = t('stats.distance');
+            var statDuration = document.getElementById('stat-duration');
+            if (statDuration) statDuration.textContent = t('stats.duration');
+
+            var speedChartTitle = document.getElementById('speed-chart-title');
+            if (speedChartTitle) speedChartTitle.textContent = t('charts.speedVsTime');
+            var gforceChartTitle = document.getElementById('gforce-chart-title');
+            if (gforceChartTitle) gforceChartTitle.textContent = t('charts.gforceVsTime');
+
+            var mapTitle = document.getElementById('map-title');
+            if (mapTitle) mapTitle.textContent = t('map.title');
+            var trackSelectorOption = document.getElementById('track-selector-option');
+            if (trackSelectorOption) trackSelectorOption.textContent = t('map.selectTrack');
+
+            var sfBtn = document.getElementById('sf-btn');
+            if (sfBtn) updateSfButton();
+            var saveTrackBtn = document.getElementById('save-track-btn');
+            if (saveTrackBtn) saveTrackBtn.textContent = t('map.saveTrack');
+            var sectorBtn = document.getElementById('sector-btn');
+            if (sectorBtn) updateSectorButton();
+            var deleteSectorBtn = document.getElementById('delete-sector-btn');
+            if (deleteSectorBtn) deleteSectorBtn.textContent = t('map.deleteSector');
+
+            var telemetryMsg = document.getElementById('telemetry-msg');
+            if (telemetryMsg) {
+                telemetryMsg.innerHTML = t('msg.extracted') + ' <strong>' + (state.telemetry ? state.telemetry.gpsPoints : '?') + '</strong> ' + t('msg.telemetryPoints');
+            }
+        }
+
         function handleFileUpload(e) {
             var file = e.target.files[0];
             if (!file) return;
@@ -522,6 +743,7 @@ return smoothed;
             state.lapResults = null;
             state.selectedTrackId = null;
             render();
+            updateAllText();
 
             var fd = new FormData();
             fd.append('video', file);
@@ -548,6 +770,7 @@ return smoothed;
                 .finally(function() {
                     state.isProcessing = false;
                     render();
+                    updateAllText();
                 });
         }
 
@@ -590,9 +813,10 @@ return smoothed;
             
             // Clear zoom state
             chartZoomState.clear();
-            
+
             // Show upload interface
             render();
+            updateAllText();
         }
 
         function toggleSfMode() {
@@ -661,21 +885,21 @@ return smoothed;
         function updateSectorButton() {
             var btn = document.getElementById('sector-btn');
             if (!btn) return;
-            
+
             var btnClass = 'px-4 py-2 rounded-lg text-white ';
-            
+
             if (state.sectorLines.length >= 2) {
                 btnClass += 'bg-gray-400 cursor-not-allowed';
-                btn.textContent = 'Max Sectors';
+                btn.textContent = t('map.maxSectors');
             } else if (state.sectorPlacementMode && state.sectorPlacementMode.__placing === 'first') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
-                btn.textContent = 'Click 1st point';
+                btn.textContent = t('map.click1stPoint');
             } else if (state.sectorPlacementMode && state.sectorPlacementMode.__placing === 'second') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
-                btn.textContent = 'Click 2nd point';
+                btn.textContent = t('map.click2ndPoint');
             } else {
                 btnClass += 'bg-orange-500 hover:bg-orange-600';
-                btn.textContent = 'Add Sector';
+                btn.textContent = t('map.addSector');
             }
             btn.className = btnClass;
             
@@ -744,16 +968,16 @@ return smoothed;
 
             if (state.sfLine && state.sfLine.__placing === 'first') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
-                btn.textContent = 'Click 1st point';
+                btn.textContent = t('map.click1stPoint');
             } else if (state.sfLine && state.sfLine.__placing === 'second') {
                 btnClass += 'bg-yellow-500 hover:bg-yellow-600';
-                btn.textContent = 'Click 2nd point';
+                btn.textContent = t('map.click2ndPoint');
             } else if (state.sfLine && state.sfLine.start && state.sfLine.end) {
                 btnClass += 'bg-green-600 hover:bg-green-700';
-                btn.textContent = 'Move S/F Line';
+                btn.textContent = t('map.moveSfLine');
             } else {
                 btnClass += 'bg-green-600 hover:bg-green-700';
-                btn.textContent = 'Set S/F Line';
+                btn.textContent = t('map.setSfLine');
             }
             btn.className = btnClass;
         }
@@ -873,6 +1097,7 @@ return smoothed;
                     runLapDetection();
                     updateSaveTrackButton();
                     render();
+                    updateAllText();
                 }
             }
             
@@ -961,16 +1186,16 @@ return smoothed;
             }
         }
 
-        function updateLapResults() {
+function updateLapResults() {
             var lr = state.lapResults;
             var existing = document.getElementById('lap-times');
             if (existing) existing.remove();
-            
+
             if (!lr || !lr.laps || lr.laps.length === 0) return;
-            
+
             var displayDir = state.directionOverride || lr.direction;
-            var dirBtnHtml = displayDir ? '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">Swap direction</button>' : '';
-            
+            var dirBtnHtml = displayDir ? '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">' + t('lapTimes.swapDir') + '</button>' : '';
+
             var sectorCount = state.sectorLines.length;
             var sectorHeaderHtml = '';
             if (sectorCount === 1) {
@@ -978,18 +1203,18 @@ return smoothed;
             } else if (sectorCount === 2) {
                 sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th><th class="py-2">S3</th>';
             }
-            
+
             var html = '<div id="lap-times" class="bg-white rounded-lg shadow p-4 mb-6">' +
                 '<div class="flex justify-between items-center mb-3">' +
-                '<h2 class="text-lg font-semibold">Lap Times</h2>' +
+                '<h2 class="text-lg font-semibold">' + t('lapTimes.title') + '</h2>' +
                 dirBtnHtml +
                 '</div>' +
-                '<p class="text-sm text-slate-500 mb-2">Direction: ' + (displayDir || 'unknown') + ' | Best: ' + lr.bestLap.toFixed(3) + 's</p>' +
-                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">Lap</th><th class="py-2">Time</th>' + sectorHeaderHtml + '<th class="py-2">Delta</th><th class="py-2">Max Speed</th><th class="py-2">Min Speed</th></tr></thead><tbody>';
+                '<p class="text-sm text-slate-500 mb-2">' + t('lapTimes.direction') + ' ' + (displayDir || 'unknown') + ' | ' + t('lapTimes.best') + ' ' + lr.bestLap.toFixed(3) + 's</p>' +
+                '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">' + t('lapTimes.lap') + '</th><th class="py-2">' + t('lapTimes.time') + '</th>' + sectorHeaderHtml + '<th class="py-2">' + t('lapTimes.delta') + '</th><th class="py-2">' + t('lapTimes.maxSpeed') + '</th><th class="py-2">' + t('lapTimes.minSpeed') + '</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
-                
+
                 var sectorCellsHtml = '';
                 if (sectorCount === 1) {
                     var s1Time = lap.sectorTimes ? lap.sectorTimes.s1 : null;
@@ -1004,7 +1229,7 @@ return smoothed;
                                      '<td class="py-2">' + (s2Time !== null ? s2Time.toFixed(3) + 's' : '-') + '</td>' +
                                      '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
                 }
-                
+
                 html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td><td class="py-2">' + lap.minSpeed.toFixed(1) + ' km/h</td></tr>';
             }
             html += '</tbody></table></div>';
@@ -1159,6 +1384,29 @@ return smoothed;
             zoomState.isDragging = false;
         }
 
+        function handleChartDblClick(chart, e) {
+            if (!chart || !chart.scales.x) return;
+
+            var video = document.getElementById('video-player');
+            if (!video) return;
+
+            var canvas = chart.canvas;
+            var canvasRect = canvas.getBoundingClientRect();
+
+            var pixelX = e.clientX - canvasRect.left;
+
+            var chartArea = chart.chartArea;
+            if (pixelX < chartArea.left || pixelX > chartArea.right) return;
+
+            var time = chart.scales.x.getValueForPixel(pixelX);
+
+            var duration = state.telemetry ? state.telemetry.duration : 0;
+            if (time < 0) time = 0;
+            if (time > duration) time = duration;
+
+            video.currentTime = time;
+        }
+
         function initCharts() {
             if (!state.telemetry || !state.telemetry.data) return;
 
@@ -1180,7 +1428,7 @@ return smoothed;
                     type: 'line',
                     data: {
                         datasets: [{
-                            label: 'Speed',
+                            label: t('charts.speed'),
                             data: speedData,
                             borderColor: '#2563eb',
                             backgroundColor: 'rgba(37,99,235,0.1)',
@@ -1194,15 +1442,16 @@ return smoothed;
                         animation: false,
                         parsing: false,
                         normalized: true,
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false }
                         },
                         scales: {
-                            x: { 
+                            x: {
                                 type: 'linear',
                                 min: 0,
                                 max: duration,
-                                title: { display: true, text: 'Time' },
+                                title: { display: true, text: t('charts.time') },
                                 ticks: {
                                     callback: function(value) {
                                         var mins = Math.floor(value / 60);
@@ -1211,10 +1460,10 @@ return smoothed;
                                     }
                                 }
                             },
-                            y: { 
+                            y: {
                                 min: 0,
                                 max: speedMax,
-                                title: { display: true, text: 'km/h' }
+                                title: { display: true, text: t('charts.kmh') }
                             }
                         },
                         plugins: {
@@ -1222,6 +1471,7 @@ return smoothed;
                         }
                     }
                 });
+                state.speedChart.canvas.style.height = '256px';
                 
                 // Add zoom/pan event listeners to speed chart
                 speedCtx.addEventListener('wheel', function(e) { handleChartWheel(state.speedChart, e); });
@@ -1229,6 +1479,7 @@ return smoothed;
                 speedCtx.addEventListener('mousemove', function(e) { handleChartMouseMove(state.speedChart, e); });
                 speedCtx.addEventListener('mouseup', function() { handleChartMouseUp(state.speedChart); });
                 speedCtx.addEventListener('mouseleave', function() { handleChartMouseUp(state.speedChart); });
+                speedCtx.addEventListener('dblclick', function(e) { handleChartDblClick(state.speedChart, e); });
             }
 
             // G-Force
@@ -1251,23 +1502,24 @@ return smoothed;
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: 'Longitudinal', data: data.map(function(d, i) { return {x: d.t, y: smoothGy[i]}; }), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0, tension: 0.3 },
-                            { label: 'Lateral', data: data.map(function(d, i) { return {x: d.t, y: smoothGz[i]}; }), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0, tension: 0.3 }
+                            { label: t('charts.longitudinal'), data: data.map(function(d, i) { return {x: d.t, y: smoothGz[i]}; }), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+                            { label: t('charts.lateral'), data: data.map(function(d, i) { return {x: d.t, y: smoothGy[i]}; }), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0, tension: 0.3 }
                         ]
                     },
                     options: {
                         animation: false,
                         parsing: false,
                         normalized: true,
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: { display: true }
                         },
                         scales: {
-                            x: { 
+                            x: {
                                 type: 'linear',
                                 min: 0,
                                 max: duration,
-                                title: { display: true, text: 'Time' },
+                                title: { display: true, text: t('charts.time') },
                                 ticks: {
                                     callback: function(value) {
                                         var mins = Math.floor(value / 60);
@@ -1276,14 +1528,15 @@ return smoothed;
                                     }
                                 }
                             },
-                            y: { 
+                            y: {
                                 min: -gBound,
                                 max: gBound,
-                                title: { display: true, text: 'G' }
+                                title: { display: true, text: t('charts.g') }
                             }
                         }
                     }
                 });
+                state.gforceChart.canvas.style.height = '256px';
                 
                 // Add zoom/pan event listeners to G-force chart
                 gCtx.addEventListener('wheel', function(e) { handleChartWheel(state.gforceChart, e); });
@@ -1291,6 +1544,7 @@ return smoothed;
                 gCtx.addEventListener('mousemove', function(e) { handleChartMouseMove(state.gforceChart, e); });
                 gCtx.addEventListener('mouseup', function() { handleChartMouseUp(state.gforceChart); });
                 gCtx.addEventListener('mouseleave', function() { handleChartMouseUp(state.gforceChart); });
+                gCtx.addEventListener('dblclick', function(e) { handleChartDblClick(state.gforceChart, e); });
             }
             
             updateLapLabels();

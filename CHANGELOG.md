@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [v0.8] - 2026-04-28
+
+### Added
+- Chinese language support with toggle button ("切换语言"/"Switch Language")
+- Translation system with EN/ZH for all UI text
+- Double-click on speed/G-force chart to seek video to that timestamp
+- updateAllText function for language-aware UI updates
+
+### Changed
+- G-force chart: green = lateral, red = longitudinal (colors and data swapped)
+- Telemetry overlay: LONG shown in red, LAT shown in green (matching chart colors)
+- Nav bar links now have IDs for language translation
+- Chart dataset labels translated dynamically on language toggle
+
+### Fixed
+- updateAllText moved from attachEvents local scope to IIFE scope (was causing ReferenceError on file upload)
+- Track selection no longer resets language to English
+- Lap times table now translates properly on language toggle
+- All render() calls now followed by updateAllText() to preserve language state
+
+## [v0.7] - 2026-04-27
+
+### Added
+- Min speed column in lap time table
+- Telemetry overlay moved to top-right of video (speed, LONG, LAT)
+- Max speed and min speed per lap in lap results
+
+### Changed
+- Telemetry display (speed, LONG, LAT) moved from below video to overlay on video
+
+## [v0.6] - 2026-04-26
+
 ### Added
 - Sticky header with navigation pill buttons (Video, Stats, Speed Chart, G-Force Chart, Map, Lap Times)
 - Smooth scroll navigation with scroll-padding-top for header clearance
