@@ -168,6 +168,7 @@
                 'map.setSfLine': 'Set S/F Line',
                 'map.moveSfLine': 'Move S/F Line',
                 'map.saveTrack': 'Save Track',
+                'map.updateSectors': 'Update Sectors',
                 'map.addSector': 'Add Sector',
                 'map.deleteSector': 'Delete Sector',
                 'map.maxSectors': 'Max Sectors',
@@ -225,6 +226,7 @@
                 'map.setSfLine': '设置起终点线',
                 'map.moveSfLine': '移动起终点线',
                 'map.saveTrack': '保存赛道',
+                'map.updateSectors': '更新分段',
                 'map.addSector': '添加分段',
                 'map.deleteSector': '删除分段',
                 'map.maxSectors': '已达最大分段数',
@@ -321,7 +323,13 @@ return smoothed;
                 sfLine: {
                     start: { lat: state.sfLine.start.lat, lon: state.sfLine.start.lon },
                     end: { lat: state.sfLine.end.lat, lon: state.sfLine.end.lon }
-                }
+                },
+                sectorLines: state.sectorLines.map(function(sl) {
+                    return {
+                        start: { lat: sl.start.lat, lon: sl.start.lon },
+                        end: { lat: sl.end.lat, lon: sl.end.lon }
+                    };
+                })
             };
 
             fetch('/api/tracks', {
@@ -339,6 +347,7 @@ return smoothed;
             .then(function() {
                 updateSfButton();
                 updateSaveTrackButton();
+                updateUpdateButton();
                 render();
                 updateAllText();
             })
@@ -356,6 +365,48 @@ return smoothed;
                 [state.sfLine.start.lat, state.sfLine.start.lon],
                 [state.sfLine.end.lat, state.sfLine.end.lon]
             ], { color: '#22c55e', weight: 4, opacity: 1 }).addTo(state.map);
+        }
+
+        function drawSectorLine(lineData, index) {
+            var layer = L.polyline([
+                [lineData.start.lat, lineData.start.lon],
+                [lineData.end.lat, lineData.end.lon]
+            ], { color: '#f97316', weight: 4, opacity: 1 }).on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                selectSector(index);
+            }).addTo(state.map);
+            state.sectorLineLayers.push(layer);
+        }
+
+        function restoreSectors(sectorLinesData) {
+            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+            state.sectorLineLayers = [];
+            state.sectorLines = [];
+            state.selectedSectorIndex = null;
+
+            if (!sectorLinesData || sectorLinesData.length === 0) return;
+
+            for (var i = 0; i < sectorLinesData.length; i++) {
+                state.sectorLines.push({
+                    start: { lat: sectorLinesData[i].start.lat, lon: sectorLinesData[i].start.lon },
+                    end: { lat: sectorLinesData[i].end.lat, lon: sectorLinesData[i].end.lon }
+                });
+                drawSectorLine(state.sectorLines[i], i);
+            }
+
+            if (state.lapResults && state.lapResults.laps.length > 0) {
+                try {
+                    var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
+                    state.lapResults.laps = sectorResult.laps;
+                    state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                } catch (e) {
+                    console.error('detectSectors error:', e);
+                }
+            }
+
+            updateSectorButton();
+            updateLapResults();
+            updateUpdateButton();
         }
 
         function runLapDetection() {
@@ -531,6 +582,7 @@ return smoothed;
                 '</select>' +
                 '<button id="sf-btn" class="px-4 py-2 rounded-lg text-white bg-green-600 hover:bg-green-700">Set S/F Line</button>' +
                 '<button id="save-track-btn" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 hidden">Save Track</button>' +
+                '<button id="update-track-btn" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 hidden">Update Sectors</button>' +
                 '<button id="sector-btn" class="px-4 py-2 rounded-lg text-white bg-orange-500 hover:bg-orange-600">Add Sector</button>' +
                 '<button id="delete-sector-btn" class="px-4 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 hidden">Delete Sector</button>' +
                 '</div>' +
@@ -610,15 +662,12 @@ return smoothed;
                             state.sfLineLayer = null;
                         }
                         state.lapResults = null;
-                        state.sectorLines = [];
-                        if (state.sectorLineLayers) {
-                            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
-                            state.sectorLineLayers = [];
-                        }
+                        restoreSectors([]);
                         updateLapResults();
                         updateLapLabels();
                         updateSfButton();
                         updateSaveTrackButton();
+                        updateUpdateButton();
                         render();
                         updateAllText();
                         return;
@@ -631,14 +680,11 @@ return smoothed;
                             end: { lat: track.sfLine.end.lat, lon: track.sfLine.end.lon }
                         };
                         state.lapResults = null;
-                        state.sectorLines = [];
-                        if (state.sectorLineLayers) {
-                            state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
-                            state.sectorLineLayers = [];
-                        }
                         drawStoredSfLine();
                         runLapDetection();
+                        restoreSectors(track.sectorLines || []);
                         updateSaveTrackButton();
+                        updateUpdateButton();
                         render();
                         updateAllText();
                     }
@@ -650,6 +696,13 @@ return smoothed;
             if (saveTrackBtn) {
                 saveTrackBtn.addEventListener('click', function() {
                     promptTrackNameAndSave();
+                });
+            }
+
+            var updateTrackBtn = document.getElementById('update-track-btn');
+            if (updateTrackBtn) {
+                updateTrackBtn.addEventListener('click', function() {
+                    updateTrackSectors();
                 });
             }
 
@@ -719,6 +772,9 @@ return smoothed;
             if (sfBtn) updateSfButton();
             var saveTrackBtn = document.getElementById('save-track-btn');
             if (saveTrackBtn) saveTrackBtn.textContent = t('map.saveTrack');
+            var updateTrackBtn = document.getElementById('update-track-btn');
+            if (updateTrackBtn) updateTrackBtn.textContent = t('map.updateSectors');
+            if (updateTrackBtn) updateUpdateButton();
             var sectorBtn = document.getElementById('sector-btn');
             if (sectorBtn) updateSectorButton();
             var deleteSectorBtn = document.getElementById('delete-sector-btn');
@@ -791,11 +847,11 @@ return smoothed;
             state.sfMarkers = [];
             state.lapResults = null;
             state.selectedSectorIndex = null;
+            state.selectedTrackId = null;
             
             // Clear sector lines and markers
-            state.sectorLines.forEach(function(layer) { state.map.removeLayer(layer); });
-            state.sectorLines = [];
             state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+            state.sectorLines = [];
             state.sectorLineLayers = [];
             state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
             state.sectorMarkers = [];
@@ -846,9 +902,8 @@ return smoothed;
                 }
                 state.lapResults = null;
                 state.selectedSectorIndex = null;
-                state.sectorLines.forEach(function(layer) { state.map.removeLayer(layer); });
-                state.sectorLines = [];
                 state.sectorLineLayers.forEach(function(layer) { state.map.removeLayer(layer); });
+                state.sectorLines = [];
                 state.sectorLineLayers = [];
                 state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
                 state.sectorMarkers = [];
@@ -856,6 +911,7 @@ return smoothed;
             updateSfButton();
             updateLapResults();
             updateSectorButton();
+            updateUpdateButton();
         }
 
         function toggleSectorMode() {
@@ -955,9 +1011,7 @@ return smoothed;
             
             updateSectorButton();
             updateLapResults();
-            
-            var overlay = document.getElementById('lap-timer-overlay');
-            if (overlay) overlay.style.width = 'auto';
+            updateUpdateButton();
         }
 
         function updateSfButton() {
@@ -980,6 +1034,7 @@ return smoothed;
                 btn.textContent = t('map.setSfLine');
             }
             btn.className = btnClass;
+            updateUpdateButton();
         }
 
         function updateSaveTrackButton() {
@@ -988,6 +1043,70 @@ return smoothed;
 
             var show = state.sfLine && state.sfLine.start && state.sfLine.end && !state.selectedTrackId;
             btn.classList.toggle('hidden', !show);
+        }
+
+        function updateUpdateButton() {
+            var btn = document.getElementById('update-track-btn');
+            if (!btn) return;
+
+            if (!state.selectedTrackId || (state.sfLine && state.sfLine.__placing)) {
+                btn.classList.add('hidden');
+                return;
+            }
+
+            var storedTrack = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
+            if (!storedTrack) {
+                btn.classList.add('hidden');
+                return;
+            }
+
+            var storedSectors = storedTrack.sectorLines || [];
+            var currentSectors = state.sectorLines || [];
+
+            if (JSON.stringify(currentSectors) !== JSON.stringify(storedSectors)) {
+                btn.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        function updateTrackSectors() {
+            if (!state.selectedTrackId) return;
+
+            var storedTrack = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
+            var storedSectors = storedTrack ? (storedTrack.sectorLines || []) : [];
+            var currentSectors = state.sectorLines || [];
+
+            if (currentSectors.length === 0 && storedSectors.length > 0) {
+                if (!confirm('This will remove all saved sector lines from this track. Continue?')) {
+                    return;
+                }
+            }
+
+            var sectorLinesData = currentSectors.map(function(sl) {
+                return {
+                    start: { lat: sl.start.lat, lon: sl.start.lon },
+                    end: { lat: sl.end.lat, lon: sl.end.lon }
+                };
+            });
+
+            fetch('/api/tracks/' + state.selectedTrackId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sectorLines: sectorLinesData })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    return loadStoredTracks();
+                }
+            })
+            .then(function() {
+                updateUpdateButton();
+            })
+            .catch(function(err) {
+                console.error('Failed to update track sectors:', err);
+            });
         }
 
         function initMap() {
@@ -1020,6 +1139,13 @@ return smoothed;
                 drawStoredSfLine();
                 runLapDetection();
                 updateSaveTrackButton();
+                if (state.selectedTrackId) {
+                    var storedTrack = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
+                    if (storedTrack && storedTrack.sectorLines && storedTrack.sectorLines.length > 0) {
+                        restoreSectors(storedTrack.sectorLines);
+                    }
+                }
+                updateUpdateButton();
             }
 
             state.map.on('click', function(e) {
@@ -1096,6 +1222,7 @@ return smoothed;
 
                     runLapDetection();
                     updateSaveTrackButton();
+                    updateUpdateButton();
                     render();
                     updateAllText();
                 }
@@ -1153,14 +1280,7 @@ return smoothed;
                     }).addTo(state.map);
                     state.sectorMarkers.push(marker2);
                     
-                    var sectorLayer = L.polyline([
-                        [state.sectorLines[lineIndex].start.lat, state.sectorLines[lineIndex].start.lon],
-                        [state.sectorLines[lineIndex].end.lat, state.sectorLines[lineIndex].end.lon]
-                    ], { color: '#f97316', weight: 4, opacity: 1 }).on('click', function(e) {
-                        L.DomEvent.stopPropagation(e);
-                        selectSector(lineIndex);
-                    }).addTo(state.map);
-                    state.sectorLineLayers.push(sectorLayer);
+                    drawSectorLine(state.sectorLines[lineIndex], lineIndex);
                     
                     state.sectorMarkers.forEach(function(m) { state.map.removeLayer(m); });
                     state.sectorMarkers = [];
@@ -1179,6 +1299,7 @@ return smoothed;
                     
                     updateSectorButton();
                     updateLapResults();
+                    updateUpdateButton();
                     
                     var overlay = document.getElementById('lap-timer-overlay');
                     if (overlay) overlay.style.width = 'auto';

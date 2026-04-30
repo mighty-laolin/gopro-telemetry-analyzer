@@ -94,6 +94,7 @@ app.post('/api/tracks', (req, res) => {
         return res.status(400).json({ error: 'Invalid track data' });
     }
     newTrack.id = Date.now().toString();
+    newTrack.sectorLines = validateSectorLines(newTrack.sectorLines);
 
     fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
         let tracks = [];
@@ -107,6 +108,47 @@ app.post('/api/tracks', (req, res) => {
         });
     });
 });
+
+app.put('/api/tracks/:id', (req, res) => {
+    const trackId = req.params.id;
+    const sectorLines = req.body.sectorLines;
+
+    if (!Array.isArray(sectorLines)) {
+        return res.status(400).json({ error: 'sectorLines must be an array' });
+    }
+    if (sectorLines.length > 2) {
+        return res.status(400).json({ error: 'Maximum 2 sector lines allowed' });
+    }
+    const validated = validateSectorLines(sectorLines);
+
+    fs.readFile(TRACKS_FILE, 'utf8', (err, data) => {
+        if (err) {
+            if (err.code === 'ENOENT') return res.status(404).json({ error: 'Track not found' });
+            return res.status(500).json({ error: 'Failed to read tracks' });
+        }
+        let tracks;
+        try { tracks = JSON.parse(data).tracks || []; } catch(e) { tracks = []; }
+        const index = tracks.findIndex(t => t.id === trackId);
+        if (index === -1) return res.status(404).json({ error: 'Track not found' });
+        tracks[index].sectorLines = validated;
+        fs.writeFile(TRACKS_FILE, JSON.stringify({ tracks }, null, 2), (err) => {
+            if (err) return res.status(500).json({ error: 'Failed to save track' });
+            res.json({ success: true, track: tracks[index] });
+        });
+    });
+});
+
+function validateSectorLines(sectorLines) {
+    if (!Array.isArray(sectorLines)) return [];
+    return sectorLines.filter(line =>
+        line && line.start && line.end &&
+        typeof line.start.lat === 'number' && typeof line.start.lon === 'number' &&
+        typeof line.end.lat === 'number' && typeof line.end.lon === 'number'
+    ).slice(0, 2).map(line => ({
+        start: { lat: line.start.lat, lon: line.start.lon },
+        end: { lat: line.end.lat, lon: line.end.lon }
+    }));
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

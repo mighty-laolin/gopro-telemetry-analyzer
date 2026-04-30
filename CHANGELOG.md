@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- Sector lines are now saved alongside S/F lines when saving a track
+- "Update Sectors" button to save sector line changes to an existing track
+- `PUT /api/tracks/:id` API endpoint for updating track sector lines
+- Sector lines restored from stored track on track load and auto-detection
+- Confirmation dialog when updating would remove previously saved sectors
+- `drawSectorLine()` and `restoreSectors()` helper functions for sector rendering
+
+### Fixed
+- Sector line data objects incorrectly passed to `state.map.removeLayer()` (lines 796, 849)
+- `resetToUpload()` not clearing `selectedTrackId`
+- "Update Sectors" button now hidden during S/F line placement mode
+
 ## [v0.8] - 2026-04-28
 
 ### Added

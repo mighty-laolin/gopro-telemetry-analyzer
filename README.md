@@ -75,11 +75,12 @@ http://localhost:3001
 5. **Save Track**:
    - After setting an S/F line manually, click the blue "Save Track" button
    - Enter a track name to save it to the track library
-   - The S/F line data is stored on the server and loaded on future visits
+   - The S/F line and any sector lines are stored on the server and loaded on future visits
    - Note: Clicking "Cancel" when prompted for a track name saves nothing (one-off S/F line)
 
 6. **Track Selector**:
    - Use the dropdown before the S/F button to manually select a stored track
+   - Selecting a track restores both the S/F line and any saved sector lines
    - Select "-- Select Track --" to clear the selection and remove the S/F line
    - Moving an auto-detected S/F line resets the track to "Unknown Track" and shows "Save Track" button
 
@@ -89,18 +90,24 @@ http://localhost:3001
    - Repeat to add a second sector line (maximum 2 sectors = 3 total sectors)
    - Sector times appear in the lap time table and video overlay
 
-8. **Delete Sector Line**:
+8. **Update Sectors**:
+   - When sector lines differ from what's saved on the current track, a blue "Update Sectors" button appears
+   - Click to save the current sector lines to the track
+   - If the update would remove previously saved sectors, a confirmation dialog is shown
+   - Button is hidden while placing or moving the S/F line
+
+9. **Delete Sector Line**:
    - Click on a sector line on the map to select it (turns yellow)
    - Click the red "Delete Sector" button to remove it
    - Sector times will be recalculated
 
-9. **Move S/F Line**:
+10. **Move S/F Line**:
    - Click "Move S/F Line" to reposition
    - Previous line is automatically removed
    - All sector lines are cleared when S/F line is moved
    - Moving an auto-detected S/F line resets the track to "Unknown Track"
 
-10. **Play Video**: The vertical cursor on charts moves in sync with video playback
+11. **Play Video**: The vertical cursor on charts moves in sync with video playback
     - Lap timer overlay shows current lap number, lap time, best lap time, and sector times
     - Sector times update in real-time as you pass each sector line
     - Lap labels (yellow) on charts mark lap boundaries - click to jump to that lap
@@ -131,7 +138,7 @@ http://localhost:3001
 ```
 .
 ├── server.js                    # Express server
-├── tracks.json                  # Track library (S/F line data, server-managed)
+├── tracks.json                  # Track library (S/F line + sector lines, server-managed)
 ├── public/
 │   ├── index.html              # Frontend (HTML/CSS/JS)
 │   ├── lapDetector.js          # Lap and sector detection logic
@@ -159,5 +166,7 @@ http://localhost:3001
 - Max G-force shown is horizontal G-force = sqrt(gy² + gz²) (excludes vertical)
 - Lap labels on charts: click to seek video to lap start time
 - Track auto-detection: matches stored S/F lines within ~1km margin; if multiple tracks match, no auto-detection occurs
+- Sector lines are persisted with tracks and restored on track load
+- Track library API: `POST /api/tracks` (create), `PUT /api/tracks/:id` (update sectors), `GET /api/tracks` (list)
 - Double-click on charts: video jumps to clicked timestamp
 - Language toggle: click "切换语言" button in header to switch between English and Chinese
