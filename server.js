@@ -13,13 +13,13 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const PARSER_DIR = path.join(__dirname, 'gpmf-parser-main', 'demo');
-const PARSER_BIN = path.join(PARSER_DIR, 'gps_parser');
+const PARSER_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'gps_parser.exe' : 'gps_parser');
 const TRACKS_FILE = path.join(__dirname, 'tracks.json');
 
 function parseTelemetry(inputPath) {
     return new Promise((resolve, reject) => {
         const absInputPath = path.isAbsolute(inputPath) ? inputPath : path.resolve(inputPath);
-        const proc = spawn('./gps_parser', [absInputPath, '-json'], {
+        const proc = spawn(process.platform === 'win32' ? 'gps_parser.exe' : './gps_parser', [absInputPath, '-json'], {
             cwd: PARSER_DIR
         });
         

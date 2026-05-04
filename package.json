@@ -1,6 +1,6 @@
 {
   "name": "gopro-telemetry-app",
-  "version": "1.0.0",
+  "version": "0.8.1",
   "description": "GoPro Telemetry Analyzer",
   "main": "server.js",
   "scripts": {
