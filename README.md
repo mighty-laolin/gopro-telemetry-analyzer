@@ -22,7 +22,7 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 
 - Node.js 18+
 - macOS or Windows (pre-built C parser binaries included for both platforms)
-- A GoPro MP4 video with GPS data (Hero13, Hero12, Hero11, etc.)
+- A GoPro MP4 video with GPS data (Hero13 Black, Hero11 Black, etc.)
 
 ## Installation
 
@@ -50,7 +50,7 @@ http://localhost:3001
 
 ## Usage
 
-1. **Upload Video**: Click on the upload area or drop a GoPro MP4 file
+1. **Upload Video**: Click on the upload area or drop a GoPro MP4 file. The app reads the MP4 structure locally in the browser, extracts only the small GPMF metadata payloads (~7MB for a typical file), and sends them to the server for parsing — no full video upload needed. If local extraction fails, it falls back to uploading the entire video to the server (shown with a warning banner).
 2. **View Dashboard**: Once processed, you'll see:
    - Video player with real-time telemetry (speed, G-forces, altitude)
    - Speed chart
@@ -141,24 +141,34 @@ http://localhost:3001
 ├── tracks.json                  # Track library (S/F line + sector lines, server-managed)
 ├── public/
 │   ├── index.html              # Frontend (HTML/CSS/JS)
+│   ├── mp4Reader.js            # Client-side MP4 reader (moov atom extraction, GPMF data reading)
 │   ├── lapDetector.js          # Lap and sector detection logic
 │   └── gForceAnalyzer.js       # G-force analysis algorithms
 ├── gpmf-parser-main/
 │   └── demo/
-│       ├── gps_parser          # C binary for macOS (GPS + ACCL extraction)
-│       └── gps_parser.exe      # C binary for Windows
+│       ├── gps_parser          # C binary for macOS (full MP4 GPS + ACCL extraction)
+│       ├── gps_parser.exe      # C binary for Windows
+│       ├── mp4_offsets         # C binary for macOS (GPMF payload offset/timing extraction)
+│       ├── mp4_offsets.exe     # C binary for Windows
+│       ├── gps_parser_gpmf     # C binary for macOS (raw GPMF payload parsing)
+│       └── gps_parser_gpmf.exe # C binary for Windows
 └── package.json
 ```
 
 ## Supported GoPro Models
 
 - Hero13 Black (GPS9 format)
-- Hero12 Black
 - Hero11 Black
 - Other models with GPS telemetry
 
+> **Note:** Hero12 Black does not include GPS telemetry data and is not supported.
+
 ## Notes
 
+- Video extraction uses client-side MP4 reading: the browser reads the moov atom and GPMF payloads via `file.slice()`, sending only small data to the server for parsing — even 10GB+ files work without uploading
+- Fallback mode: if local extraction fails, the app falls back to uploading the full video to the server (amber warning banner shown)
+- Test fallback mode: append `?fallback` to the URL (e.g. `http://localhost:3001/?fallback`)
+- Server endpoints: `POST /api/analyze-moov` (moov analysis), `POST /api/extract-gpmf` (GPMF parsing), `POST /api/extract` (full video upload fallback)
 - Maximum video duration: ~30 minutes (20,000 GPS points, 400,000 accelerometer points)
 - Lap detection uses 20m S/F line with GPS track crossing detection
 - Sector lines are ordered by time from S/F (shortest time = S1)

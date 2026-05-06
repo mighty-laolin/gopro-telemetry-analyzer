@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script src="mp4Reader.js"></script>
     <script type="module">
         import { detectLaps, detectSectors, calculateLineLength } from './lapDetector.js';
         import { computeMaxHorizontalGForce } from './gForceAnalyzer.js';
@@ -114,6 +115,8 @@
             telemetry: null,
             videoUrl: null,
             isProcessing: false,
+            processingPhase: null,
+            isFallback: false,
             error: null,
             sfLine: null,
             sfLineLayer: null,
@@ -477,6 +480,13 @@ return smoothed;
         }
 
         function renderProcessing() {
+            var phaseText = state.processingPhase || 'Extracting telemetry data...';
+            var fallbackBanner = '';
+            if (state.isFallback) {
+                fallbackBanner = '<div class="mt-4 inline-block bg-amber-50 border border-amber-300 text-amber-800 px-4 py-2 rounded-lg text-sm">' +
+                    '<span class="font-semibold">Server upload mode</span> — Uploading full video to server (slower). Local extraction unavailable.' +
+                    '</div>';
+            }
             return '<div class="min-h-screen bg-slate-50">' +
                 '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
                 '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
@@ -485,7 +495,9 @@ return smoothed;
                 '<main class="max-w-7xl mx-auto p-6">' +
                 '<div class="bg-white rounded-lg shadow-md p-12 text-center">' +
                 '<div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>' +
-                '<p class="text-lg text-slate-600">Extracting telemetry data...</p></div></main></div>';
+                '<p class="text-lg text-slate-600">' + phaseText + '</p>' +
+                fallbackBanner +
+                '</div></main></div>';
         }
 
         function renderError() {
@@ -793,6 +805,8 @@ return smoothed;
             state.isProcessing = true;
             state.error = null;
             state.telemetry = null;
+            state.processingPhase = null;
+            state.isFallback = false;
             state.videoUrl = URL.createObjectURL(file);
             state.sfLine = null;
             state.sfLineLayer = null;
@@ -801,33 +815,77 @@ return smoothed;
             render();
             updateAllText();
 
-            var fd = new FormData();
-            fd.append('video', file);
+            var applyTelemetry = function(data) {
+                state.telemetry = data;
+                var matches = matchTrackToTelemetry();
+                if (matches.length === 1) {
+                    state.sfLine = {
+                        start: matches[0].sfLine.start,
+                        end: matches[0].sfLine.end
+                    };
+                    state.selectedTrackId = matches[0].id;
+                } else if (matches.length > 1) {
+                    console.warn('Multiple tracks matched - giving up on auto-load');
+                    state.selectedTrackId = null;
+                }
+            };
 
-            fetch('http://localhost:3001/api/extract', { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    state.telemetry = data;
-                    var matches = matchTrackToTelemetry();
-                    if (matches.length === 1) {
-                        state.sfLine = {
-                            start: matches[0].sfLine.start,
-                            end: matches[0].sfLine.end
-                        };
-                        state.selectedTrackId = matches[0].id;
-                    } else if (matches.length > 1) {
-                        console.warn('Multiple tracks matched - giving up on auto-load');
-                        state.selectedTrackId = null;
+            var updatePhase = function(text) {
+                state.processingPhase = text;
+                render();
+            };
+
+            var enterFallback = function() {
+                state.isFallback = true;
+                state.processingPhase = 'Uploading video to server...';
+                render();
+            };
+
+            var doServerUpload = function() {
+                enterFallback();
+                var fd = new FormData();
+                fd.append('video', file);
+                return fetch('/api/extract', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); });
+            };
+
+            var useFallbackParam = new URLSearchParams(window.location.search).has('fallback');
+
+            if (window.mp4Reader && !useFallbackParam) {
+                mp4Reader.extractTelemetry(file, function(phase, current, total, bytes) {
+                    console.log('[GPMF]', phase, current + '/' + total, bytes + ' bytes');
+                    if (phase === 'reading') {
+                        updatePhase('Reading MP4 structure...');
+                    } else if (phase === 'analyzing') {
+                        updatePhase('Analyzing metadata...');
+                    } else if (phase === 'extracting') {
+                        updatePhase('Extracting GPMF data (payload ' + current + '/' + total + ')...');
+                    } else if (phase === 'parsing') {
+                        updatePhase('Parsing telemetry...');
                     }
-                })
-                .catch(function(err) {
-                    state.error = err.message;
-                })
-                .finally(function() {
+                }).then(function(data) {
+                    applyTelemetry(data);
+                }).catch(function(err) {
+                    console.warn('Client-side extraction failed, falling back to server upload:', err);
+                    return doServerUpload().then(function(data) {
+                        applyTelemetry(data);
+                    });
+                }).finally(function() {
                     state.isProcessing = false;
                     render();
                     updateAllText();
                 });
+            } else {
+                doServerUpload().then(function(data) {
+                    applyTelemetry(data);
+                }).catch(function(err) {
+                    state.error = err.message;
+                }).finally(function() {
+                    state.isProcessing = false;
+                    render();
+                    updateAllText();
+                });
+            }
         }
 
         function resetToUpload() {
@@ -841,6 +899,8 @@ return smoothed;
             // Clear telemetry and state
             state.telemetry = null;
             state.videoUrl = null;
+            state.processingPhase = null;
+            state.isFallback = false;
             state.sfLine = null;
             state.sfLineLayer = null;
             state.sfMarkers.forEach(function(m) { state.map.removeLayer(m); });

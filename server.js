@@ -6,7 +6,8 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const uploadLarge = multer({ dest: 'uploads/' });
+const uploadSmall = multer({ dest: 'uploads/', limits: { fileSize: 100 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json());
@@ -14,6 +15,8 @@ app.use(express.static('public'));
 
 const PARSER_DIR = path.join(__dirname, 'gpmf-parser-main', 'demo');
 const PARSER_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'gps_parser.exe' : 'gps_parser');
+const OFFSETS_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'mp4_offsets.exe' : 'mp4_offsets');
+const GPMF_PARSER_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'gps_parser_gpmf.exe' : 'gps_parser_gpmf');
 const TRACKS_FILE = path.join(__dirname, 'tracks.json');
 
 function parseTelemetry(inputPath) {
@@ -52,7 +55,7 @@ function parseTelemetry(inputPath) {
     });
 }
 
-app.post('/api/extract', upload.single('video'), async (req, res) => {
+app.post('/api/extract', uploadLarge.single('video'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No video file uploaded' });
     }
@@ -66,6 +69,106 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
         res.status(500).json({ error: error.message });
     } finally {
         fs.unlink(inputPath, () => {});
+    }
+});
+
+app.post('/api/analyze-moov', uploadSmall.single('moov'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No moov file uploaded' });
+    }
+
+    const moovUploadPath = path.resolve(req.file.path);
+    const mp4Path = moovUploadPath + '.mp4';
+
+    try {
+        const moovData = fs.readFileSync(moovUploadPath);
+
+        const ftyp = Buffer.from([
+            0x00, 0x00, 0x00, 0x14,
+            0x66, 0x74, 0x79, 0x70,
+            0x69, 0x73, 0x6F, 0x6D,
+            0x00, 0x00, 0x00, 0x01,
+            0x69, 0x73, 0x6F, 0x6D
+        ]);
+
+        const mdatHeader = Buffer.from([
+            0x00, 0x00, 0x00, 0x08,
+            0x6D, 0x64, 0x61, 0x74
+        ]);
+
+        const mp4Buf = Buffer.concat([ftyp, moovData, mdatHeader]);
+        fs.writeFileSync(mp4Path, mp4Buf);
+
+        const result = await new Promise((resolve, reject) => {
+            const proc = spawn(process.platform === 'win32' ? 'mp4_offsets.exe' : './mp4_offsets', [mp4Path], {
+                cwd: PARSER_DIR
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => { stdout += data.toString(); });
+            proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            proc.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`mp4_offsets exited with code ${code}: ${stderr}`));
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(stdout));
+                } catch (e) {
+                    reject(new Error('Failed to parse mp4_offsets output'));
+                }
+            });
+        });
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    } finally {
+        fs.unlink(moovUploadPath, () => {});
+        if (fs.existsSync(mp4Path)) fs.unlink(mp4Path, () => {});
+    }
+});
+
+app.post('/api/extract-gpmf', uploadSmall.fields([{ name: 'gpmf_data', maxCount: 1 }, { name: 'metadata', maxCount: 1 }]), async (req, res) => {
+    if (!req.files || !req.files.gpmf_data || !req.files.metadata) {
+        return res.status(400).json({ error: 'Missing gpmf_data or metadata' });
+    }
+
+    const gpmfPath = path.resolve(req.files.gpmf_data[0].path);
+    const metaPath = path.resolve(req.files.metadata[0].path);
+
+    try {
+        const result = await new Promise((resolve, reject) => {
+            const proc = spawn(process.platform === 'win32' ? 'gps_parser_gpmf.exe' : './gps_parser_gpmf', [metaPath, gpmfPath], {
+                cwd: PARSER_DIR
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => { stdout += data.toString(); });
+            proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            proc.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`gps_parser_gpmf exited with code ${code}: ${stderr}`));
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(stdout));
+                } catch (e) {
+                    reject(new Error('Failed to parse gps_parser_gpmf output'));
+                }
+            });
+        });
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    } finally {
+        fs.unlink(gpmfPath, () => {});
+        fs.unlink(metaPath, () => {});
     }
 });
 

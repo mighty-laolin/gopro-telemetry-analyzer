@@ -18,6 +18,12 @@ gpmfdemo : GPMF_demo.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o GPMF_print.o
 gps_parser : gps_parser.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o
 		gcc -o gps_parser$(EXE_SUFFIX) gps_parser.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o $(ASAN_FLAGS) -lm
 
+mp4_offsets : mp4_offsets.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o
+		gcc -o mp4_offsets$(EXE_SUFFIX) mp4_offsets.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o $(ASAN_FLAGS) -lm
+
+gps_parser_gpmf : gps_parser_gpmf.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o
+		gcc -o gps_parser_gpmf$(EXE_SUFFIX) gps_parser_gpmf.o GPMF_parser.o GPMF_utils.o GPMF_mp4reader.o $(ASAN_FLAGS) -lm
+
 gps_parser.o : gps_parser.c ../GPMF_parser.h ../GPMF_common.h ../GPMF_utils.h
 ifeq ($(OS),Windows_NT)
 		gcc -g $(WIN_FLAGS) -c gps_parser.c
@@ -60,9 +66,23 @@ else
 		gcc -g -c ../GPMF_utils.c
 endif
 
+mp4_offsets.o : mp4_offsets.c ../GPMF_parser.h ../GPMF_common.h ../GPMF_utils.h GPMF_mp4reader.h
+ifeq ($(OS),Windows_NT)
+		gcc -g $(WIN_FLAGS) -c mp4_offsets.c
+else
+		gcc -g -c mp4_offsets.c
+endif
+
+gps_parser_gpmf.o : gps_parser_gpmf.c ../GPMF_parser.h ../GPMF_common.h ../GPMF_utils.h GPMF_mp4reader.h
+ifeq ($(OS),Windows_NT)
+		gcc -g $(WIN_FLAGS) -c gps_parser_gpmf.c
+else
+		gcc -g -c gps_parser_gpmf.c
+endif
+
 clean :
 ifeq ($(OS),Windows_NT)
 		del /Q gpmfdemo.exe gps_parser.exe *.o 2>nul
 else
-		rm -f gpmfdemo gps_parser *.o
+		rm -f gpmfdemo gps_parser mp4_offsets gps_parser_gpmf *.o
 endif

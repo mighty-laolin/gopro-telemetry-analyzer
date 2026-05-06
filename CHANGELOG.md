@@ -3,12 +3,25 @@
 ## [Unreleased]
 
 ### Added
+- Client-side MP4 reading: browser extracts moov atom and GPMF payloads via `file.slice()` — no full video upload needed, works with 10GB+ files
+- `mp4Reader.js`: finds moov atom, reads GPMF data, orchestrates server-side parsing
+- `mp4_offsets` C tool: extracts GPMF payload offsets and timing from moov atom as JSON
+- `gps_parser_gpmf` C tool: parses raw GPMF payloads with metadata JSON input (produces identical output to `gps_parser`)
+- `POST /api/analyze-moov` endpoint: receives moov atom, builds minimal MP4, returns payload read plan
+- `POST /api/extract-gpmf` endpoint: receives GPMF binary + metadata JSON, returns telemetry
+- Processing phase indicator: shows current extraction step (reading, analyzing, extracting, parsing) with progress
+- Fallback indicator: amber warning banner when full video upload is used instead of local extraction
+- `?fallback` query parameter for testing the server upload fallback path
 - Sector lines are now saved alongside S/F lines when saving a track
 - "Update Sectors" button to save sector line changes to an existing track
 - `PUT /api/tracks/:id` API endpoint for updating track sector lines
 - Sector lines restored from stored track on track load and auto-detection
 - Confirmation dialog when updating would remove previously saved sectors
 - `drawSectorLine()` and `restoreSectors()` helper functions for sector rendering
+
+### Changed
+- Hero12 Black removed from supported models (no GPS telemetry)
+- Two multer instances: `uploadLarge` (no limit, for full video fallback) and `uploadSmall` (100MB, for moov/GPMF endpoints)
 
 ### Fixed
 - Sector line data objects incorrectly passed to `state.map.removeLayer()` (lines 796, 849)
