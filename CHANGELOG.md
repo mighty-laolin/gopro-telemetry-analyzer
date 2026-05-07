@@ -9,6 +9,8 @@
 - `gps_parser_gpmf` C tool: parses raw GPMF payloads with metadata JSON input (produces identical output to `gps_parser`)
 - `POST /api/analyze-moov` endpoint: receives moov atom, builds minimal MP4, returns payload read plan
 - `POST /api/extract-gpmf` endpoint: receives GPMF binary + metadata JSON, returns telemetry
+- Linux support: statically linked x86_64 binaries (`_linux` suffix) cross-compiled with musl
+- `make linux` target for cross-compiling from macOS
 - Processing phase indicator: shows current extraction step (reading, analyzing, extracting, parsing) with progress
 - Fallback indicator: amber warning banner when full video upload is used instead of local extraction
 - `?fallback` query parameter for testing the server upload fallback path
@@ -22,6 +24,8 @@
 ### Changed
 - Hero12 Black removed from supported models (no GPS telemetry)
 - Two multer instances: `uploadLarge` (no limit, for full video fallback) and `uploadSmall` (100MB, for moov/GPMF endpoints)
+- Server detects platform and selects correct binary: `_linux` suffix on Linux, `.exe` on Windows, no suffix on macOS
+- Binary selection logic centralized in `binName()` and `spawnBin()` helpers
 
 ### Fixed
 - Sector line data objects incorrectly passed to `state.map.removeLayer()` (lines 796, 849)

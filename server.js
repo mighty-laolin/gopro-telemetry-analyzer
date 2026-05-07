@@ -14,17 +14,27 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const PARSER_DIR = path.join(__dirname, 'gpmf-parser-main', 'demo');
-const PARSER_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'gps_parser.exe' : 'gps_parser');
-const OFFSETS_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'mp4_offsets.exe' : 'mp4_offsets');
-const GPMF_PARSER_BIN = path.join(PARSER_DIR, process.platform === 'win32' ? 'gps_parser_gpmf.exe' : 'gps_parser_gpmf');
+
+function binName(name) {
+    if (process.platform === 'win32') return name + '.exe';
+    if (process.platform === 'linux') return name + '_linux';
+    return name;
+}
+
+const PARSER_BIN = path.join(PARSER_DIR, binName('gps_parser'));
+const OFFSETS_BIN = path.join(PARSER_DIR, binName('mp4_offsets'));
+const GPMF_PARSER_BIN = path.join(PARSER_DIR, binName('gps_parser_gpmf'));
 const TRACKS_FILE = path.join(__dirname, 'tracks.json');
+
+function spawnBin(name, args) {
+    const bin = binName(name);
+    return spawn(process.platform === 'win32' ? bin : './' + bin, args, { cwd: PARSER_DIR });
+}
 
 function parseTelemetry(inputPath) {
     return new Promise((resolve, reject) => {
         const absInputPath = path.isAbsolute(inputPath) ? inputPath : path.resolve(inputPath);
-        const proc = spawn(process.platform === 'win32' ? 'gps_parser.exe' : './gps_parser', [absInputPath, '-json'], {
-            cwd: PARSER_DIR
-        });
+        const proc = spawnBin('gps_parser', [absInputPath, '-json']);
         
         let stdout = '';
         let stderr = '';
@@ -100,9 +110,7 @@ app.post('/api/analyze-moov', uploadSmall.single('moov'), async (req, res) => {
         fs.writeFileSync(mp4Path, mp4Buf);
 
         const result = await new Promise((resolve, reject) => {
-            const proc = spawn(process.platform === 'win32' ? 'mp4_offsets.exe' : './mp4_offsets', [mp4Path], {
-                cwd: PARSER_DIR
-            });
+            const proc = spawnBin('mp4_offsets', [mp4Path]);
 
             let stdout = '';
             let stderr = '';
@@ -141,9 +149,7 @@ app.post('/api/extract-gpmf', uploadSmall.fields([{ name: 'gpmf_data', maxCount:
 
     try {
         const result = await new Promise((resolve, reject) => {
-            const proc = spawn(process.platform === 'win32' ? 'gps_parser_gpmf.exe' : './gps_parser_gpmf', [metaPath, gpmfPath], {
-                cwd: PARSER_DIR
-            });
+            const proc = spawnBin('gps_parser_gpmf', [metaPath, gpmfPath]);
 
             let stdout = '';
             let stderr = '';
@@ -254,6 +260,6 @@ function validateSectorLines(sectorLines) {
 }
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Telemetry server running on http://localhost:${PORT}`);
 });

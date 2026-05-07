@@ -21,7 +21,7 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 ## Requirements
 
 - Node.js 18+
-- macOS or Windows (pre-built C parser binaries included for both platforms)
+- macOS, Windows, or Linux (pre-built C parser binaries included for all platforms)
 - A GoPro MP4 video with GPS data (Hero13 Black, Hero11 Black, etc.)
 
 ## Installation
@@ -148,10 +148,12 @@ http://localhost:3001
 │   └── demo/
 │       ├── gps_parser          # C binary for macOS (full MP4 GPS + ACCL extraction)
 │       ├── gps_parser.exe      # C binary for Windows
+│       ├── gps_parser_linux    # C binary for Linux (x86_64, statically linked)
 │       ├── mp4_offsets         # C binary for macOS (GPMF payload offset/timing extraction)
-│       ├── mp4_offsets.exe     # C binary for Windows
+│       ├── mp4_offsets_linux   # C binary for Linux
 │       ├── gps_parser_gpmf     # C binary for macOS (raw GPMF payload parsing)
-│       └── gps_parser_gpmf.exe # C binary for Windows
+│       ├── gps_parser_gpmf_linux # C binary for Linux
+│       └── makefile            # Build targets for all platforms (make linux for cross-compile)
 └── package.json
 ```
 

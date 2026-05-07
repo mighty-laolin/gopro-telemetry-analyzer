@@ -84,5 +84,18 @@ clean :
 ifeq ($(OS),Windows_NT)
 		del /Q gpmfdemo.exe gps_parser.exe *.o 2>nul
 else
-		rm -f gpmfdemo gps_parser mp4_offsets gps_parser_gpmf *.o
+		rm -f gpmfdemo gps_parser mp4_offsets gps_parser_gpmf *_linux *.o
 endif
+
+LINUX_CC := x86_64-linux-musl-gcc
+
+gps_parser_linux : gps_parser.c ../GPMF_parser.c ../GPMF_utils.c GPMF_mp4reader.c
+		$(LINUX_CC) -static -o $@ $^ -lm
+
+mp4_offsets_linux : mp4_offsets.c ../GPMF_parser.c ../GPMF_utils.c GPMF_mp4reader.c
+		$(LINUX_CC) -static -o $@ $^ -lm
+
+gps_parser_gpmf_linux : gps_parser_gpmf.c ../GPMF_parser.c ../GPMF_utils.c GPMF_mp4reader.c
+		$(LINUX_CC) -static -o $@ $^ -lm
+
+linux : gps_parser_linux mp4_offsets_linux gps_parser_gpmf_linux
