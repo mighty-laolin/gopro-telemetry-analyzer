@@ -464,22 +464,27 @@ return smoothed;
         }
 
         function renderUpload() {
+            var lang = state.language || 'en';
             return '<div class="min-h-screen bg-slate-50">' +
-                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
-                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
-                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
+                '<div>' +
+                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
+                '</div>' +
+                '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
                 '</header>' +
                 '<main class="max-w-7xl mx-auto p-6">' +
                 '<div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-dashed border-slate-300 hover:border-blue-500 transition-colors">' +
                 '<input type="file" accept=".mp4" id="file-input" class="hidden">' +
                 '<label for="file-input" class="cursor-pointer">' +
                 '<div class="text-6xl mb-4">📹</div>' +
-                '<p class="text-xl text-slate-700 mb-2">Drop your GoPro MP4 file here</p>' +
-                '<p class="text-slate-500">or click to browse</p>' +
+                '<p id="upload-drop-here" class="text-xl text-slate-700 mb-2">' + t('upload.dropHere') + '</p>' +
+                '<p id="upload-or-click" class="text-slate-500">' + t('upload.orClick') + '</p>' +
                 '</label></div></main></div>';
         }
 
         function renderProcessing() {
+            var lang = state.language || 'en';
             var phaseText = state.processingPhase || 'Extracting telemetry data...';
             var fallbackBanner = '';
             if (state.isFallback) {
@@ -488,9 +493,12 @@ return smoothed;
                     '</div>';
             }
             return '<div class="min-h-screen bg-slate-50">' +
-                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg">' +
-                '<h1 class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
-                '<p class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
+                '<div>' +
+                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
+                '</div>' +
+                '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
                 '</header>' +
                 '<main class="max-w-7xl mx-auto p-6">' +
                 '<div class="bg-white rounded-lg shadow-md p-12 text-center">' +
@@ -501,8 +509,15 @@ return smoothed;
         }
 
         function renderError() {
+            var lang = state.language || 'en';
             return '<div class="min-h-screen bg-slate-50">' +
-                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg"><h1>Error</h1></header>' +
+                '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
+                '<div>' +
+                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
+                '</div>' +
+                '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
+                '</header>' +
                 '<main class="p-6"><div class="bg-red-50 text-red-700 p-4 rounded">' + state.error + '</div></main></div>';
         }
 
@@ -737,6 +752,11 @@ return smoothed;
             if (headerTitle) headerTitle.textContent = t('app.title');
             var headerSubtitle = document.getElementById('header-subtitle');
             if (headerSubtitle) headerSubtitle.textContent = t('app.subtitle');
+
+            var uploadDropHere = document.getElementById('upload-drop-here');
+            if (uploadDropHere) uploadDropHere.textContent = t('upload.dropHere');
+            var uploadOrClick = document.getElementById('upload-or-click');
+            if (uploadOrClick) uploadOrClick.textContent = t('upload.orClick');
 
             var reuploadBtn = document.getElementById('reupload-btn');
             if (reuploadBtn) reuploadBtn.textContent = t('nav.uploadNew');
@@ -1188,8 +1208,8 @@ return smoothed;
                          (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2];
 
             state.map = L.map('map-container').setView(center, 17);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri, Maxar, Earthstar Geographics'
             }).addTo(state.map);
 
             var positions = data.map(function(d) { return [d.lat, d.lon]; });
