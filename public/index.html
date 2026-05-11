@@ -122,7 +122,6 @@
             sfLineLayer: null,
             sfMarkers: [],
             lapResults: null,
-            directionOverride: null,
             map: null,
             speedChart: null,
             gforceChart: null,
@@ -178,9 +177,8 @@
                 'map.click1stPoint': 'Click 1st point',
                 'map.click2ndPoint': 'Click 2nd point',
                 'lapTimes.title': 'Lap Times',
-                'lapTimes.swapDir': 'Swap direction',
-                'lapTimes.direction': 'Direction:',
-                'lapTimes.best': 'Best:',
+                'lapTimes.best': 'Best',
+                'lapTimes.theoreticalBest': 'Theoretical Best',
                 'lapTimes.lap': 'Lap',
                 'lapTimes.time': 'Time',
                 'lapTimes.delta': 'Delta',
@@ -236,9 +234,8 @@
                 'map.click1stPoint': '点击第一个点',
                 'map.click2ndPoint': '点击第二个点',
                 'lapTimes.title': '圈速',
-                'lapTimes.swapDir': '切换方向',
-                'lapTimes.direction': '方向:',
-                'lapTimes.best': '最佳:',
+                'lapTimes.best': '最佳',
+                'lapTimes.theoreticalBest': '理论最佳',
                 'lapTimes.lap': '圈',
                 'lapTimes.time': '时间',
                 'lapTimes.delta': '差值',
@@ -402,6 +399,8 @@ return smoothed;
                     var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
                     state.lapResults.laps = sectorResult.laps;
                     state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                    state.lapResults.bestSectorTimes = sectorResult.bestSectorTimes;
+                    state.lapResults.theoreticalBest = sectorResult.theoreticalBest;
                 } catch (e) {
                     console.error('detectSectors error:', e);
                 }
@@ -413,16 +412,17 @@ return smoothed;
         }
 
         function runLapDetection() {
-            state.directionOverride = null;
             console.log('Calling detectLaps with sfLine:', state.sfLine);
             try {
-                state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
+                state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10 });
                 console.log('detectLaps returned:', state.lapResults);
 
                 if (state.sectorLines.length > 0 && state.lapResults && state.lapResults.laps.length > 0) {
                     var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
                     state.lapResults.laps = sectorResult.laps;
                     state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                    state.lapResults.bestSectorTimes = sectorResult.bestSectorTimes;
+                    state.lapResults.theoreticalBest = sectorResult.theoreticalBest;
                     console.log('detectSectors returned:', state.lapResults);
                 }
             } catch (e) {
@@ -453,7 +453,7 @@ return smoothed;
                 html = renderUpload();
             } else if (state.isProcessing) {
                 html = renderProcessing();
-            } else if (state.error) {
+            } else if (state.error || (state.telemetry && state.telemetry.error)) {
                 html = renderError();
             } else {
                 html = renderDashboard();
@@ -518,13 +518,18 @@ return smoothed;
                 '</div>' +
                 '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
                 '</header>' +
-                '<main class="p-6"><div class="bg-red-50 text-red-700 p-4 rounded">' + state.error + '</div></main></div>';
+                '<main class="p-6"><div class="bg-red-50 text-red-700 p-4 rounded">' + (state.error || (state.telemetry && state.telemetry.error) || 'Unknown error') + '</div><button id="reupload-btn" class="mt-4 px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">Upload New Video</button></main></div>';
         }
 
         function renderDashboard() {
             var t = state.telemetry;
             var maxHGFResult = t.data ? computeMaxHorizontalGForce(t.data) : { value: 0, timestamp: 0 };
             console.log('Max Horizontal G:', maxHGFResult.value, 'at time:', maxHGFResult.timestamp);
+
+            var maxSpeed = (t.maxSpeed || 0).toFixed(1);
+            var avgSpeed = (t.avgSpeed || 0).toFixed(1);
+            var totalDistance = (t.totalDistance || 0).toFixed(2);
+            var duration = (t.duration || 0).toFixed(0);
 
             var html = '<div class="min-h-screen bg-slate-50">' +
                 '<div class="sticky top-0 z-50">' +
@@ -585,11 +590,11 @@ return smoothed;
 
             // Stats
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxSpeed" class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + t.maxSpeed.toFixed(1) + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-avgSpeed" class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + t.avgSpeed.toFixed(1) + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxSpeed" class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + maxSpeed + ' km/h</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-avgSpeed" class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + avgSpeed + ' km/h</p></div>' +
                 '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxGforce" class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-distance" class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + t.totalDistance.toFixed(2) + ' km</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-duration" class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + t.duration.toFixed(0) + 's</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-distance" class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + totalDistance + ' km</p></div>' +
+                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-duration" class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + duration + 's</p></div>' +
                 '</div>';
 
             // Speed Chart
@@ -616,7 +621,7 @@ return smoothed;
                 '</div>' +
                 '<div id="map-container" class="h-96 rounded-lg"></div></div>';
 
-            html += '<div id="telemetry-msg" class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + t.gpsPoints + '</strong> telemetry points</p></div>';
+            html += '<div id="telemetry-msg" class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + (t.gpsPoints || 0) + '</strong> telemetry points</p></div>';
             html += '</main></div>';
 
             return html;
@@ -1087,6 +1092,8 @@ return smoothed;
                 var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
                 state.lapResults.laps = sectorResult.laps;
                 state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                state.lapResults.bestSectorTimes = sectorResult.bestSectorTimes;
+                state.lapResults.theoreticalBest = sectorResult.theoreticalBest;
             }
             
             updateSectorButton();
@@ -1371,6 +1378,8 @@ return smoothed;
                             var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
                             state.lapResults.laps = sectorResult.laps;
                             state.lapResults.sectorIndices = sectorResult.sectorIndices;
+                            state.lapResults.bestSectorTimes = sectorResult.bestSectorTimes;
+                            state.lapResults.theoreticalBest = sectorResult.theoreticalBest;
                             console.log('detectSectors returned:', state.lapResults);
                         }
                     } catch (e) {
@@ -1394,10 +1403,8 @@ function updateLapResults() {
 
             if (!lr || !lr.laps || lr.laps.length === 0) return;
 
-            var displayDir = state.directionOverride || lr.direction;
-            var dirBtnHtml = displayDir ? '<button id="dir-toggle-btn" class="px-3 py-1 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700">' + t('lapTimes.swapDir') + '</button>' : '';
-
             var sectorCount = state.sectorLines.length;
+            var bestSectors = lr.bestSectorTimes || null;
             var sectorHeaderHtml = '';
             if (sectorCount === 1) {
                 sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th>';
@@ -1405,33 +1412,43 @@ function updateLapResults() {
                 sectorHeaderHtml = '<th class="py-2">S1</th><th class="py-2">S2</th><th class="py-2">S3</th>';
             }
 
+            var summaryHtml = t('lapTimes.best') + ' ' + lr.bestLap.toFixed(3) + 's';
+            if (lr.theoreticalBest !== null && lr.theoreticalBest !== undefined) {
+                summaryHtml += ' | ' + t('lapTimes.theoreticalBest') + ' ' + lr.theoreticalBest.toFixed(3) + 's';
+            }
+
             var html = '<div id="lap-times" class="bg-white rounded-lg shadow p-4 mb-6">' +
-                '<div class="flex justify-between items-center mb-3">' +
-                '<h2 class="text-lg font-semibold">' + t('lapTimes.title') + '</h2>' +
-                dirBtnHtml +
-                '</div>' +
-                '<p class="text-sm text-slate-500 mb-2">' + t('lapTimes.direction') + ' ' + (displayDir || 'unknown') + ' | ' + t('lapTimes.best') + ' ' + lr.bestLap.toFixed(3) + 's</p>' +
+                '<h2 class="text-lg font-semibold mb-3">' + t('lapTimes.title') + '</h2>' +
+                '<p class="text-sm text-slate-500 mb-2">' + summaryHtml + '</p>' +
                 '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">' + t('lapTimes.lap') + '</th><th class="py-2">' + t('lapTimes.time') + '</th>' + sectorHeaderHtml + '<th class="py-2">' + t('lapTimes.delta') + '</th><th class="py-2">' + t('lapTimes.maxSpeed') + '</th><th class="py-2">' + t('lapTimes.minSpeed') + '</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
                 var deltaClass = lap.delta >= 0 ? 'text-red-500' : 'text-green-500';
+                var isBest = lr.bestLapIndex === i;
+                var rowClass = isBest ? 'border-b bg-purple-50' : 'border-b';
+                var lapTimeClass = isBest ? 'py-2 text-purple-600 font-semibold' : 'py-2';
 
                 var sectorCellsHtml = '';
                 if (sectorCount === 1) {
                     var s1Time = lap.sectorTimes ? lap.sectorTimes.s1 : null;
                     var s3Time = lap.sectorTimes ? lap.sectorTimes.s3 : null;
-                    sectorCellsHtml = '<td class="py-2">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
-                                     '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
+                    var s1Class = (bestSectors && s1Time !== null && bestSectors.s1 !== null && Math.abs(s1Time - bestSectors.s1) < 0.0005) ? 'py-2 text-purple-600 font-semibold' : 'py-2';
+                    var s3Class = (bestSectors && s3Time !== null && bestSectors.s3 !== null && Math.abs(s3Time - bestSectors.s3) < 0.0005) ? 'py-2 text-purple-600 font-semibold' : 'py-2';
+                    sectorCellsHtml = '<td class="' + s1Class + '">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="' + s3Class + '">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
                 } else if (sectorCount === 2) {
                     var s1Time = lap.sectorTimes ? lap.sectorTimes.s1 : null;
                     var s2Time = lap.sectorTimes ? lap.sectorTimes.s2 : null;
                     var s3Time = lap.sectorTimes ? lap.sectorTimes.s3 : null;
-                    sectorCellsHtml = '<td class="py-2">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
-                                     '<td class="py-2">' + (s2Time !== null ? s2Time.toFixed(3) + 's' : '-') + '</td>' +
-                                     '<td class="py-2">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
+                    var s1Class = (bestSectors && s1Time !== null && bestSectors.s1 !== null && Math.abs(s1Time - bestSectors.s1) < 0.0005) ? 'py-2 text-purple-600 font-semibold' : 'py-2';
+                    var s2Class = (bestSectors && s2Time !== null && bestSectors.s2 !== null && Math.abs(s2Time - bestSectors.s2) < 0.0005) ? 'py-2 text-purple-600 font-semibold' : 'py-2';
+                    var s3Class = (bestSectors && s3Time !== null && bestSectors.s3 !== null && Math.abs(s3Time - bestSectors.s3) < 0.0005) ? 'py-2 text-purple-600 font-semibold' : 'py-2';
+                    sectorCellsHtml = '<td class="' + s1Class + '">' + (s1Time !== null ? s1Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="' + s2Class + '">' + (s2Time !== null ? s2Time.toFixed(3) + 's' : '-') + '</td>' +
+                                     '<td class="' + s3Class + '">' + (s3Time !== null ? s3Time.toFixed(3) + 's' : '-') + '</td>';
                 }
 
-                html += '<tr class="border-b"><td class="py-2">' + lap.lap + '</td><td class="py-2">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td><td class="py-2">' + lap.minSpeed.toFixed(1) + ' km/h</td></tr>';
+                html += '<tr class="' + rowClass + '"><td class="py-2">' + lap.lap + '</td><td class="' + lapTimeClass + '">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td><td class="py-2">' + lap.minSpeed.toFixed(1) + ' km/h</td></tr>';
             }
             html += '</tbody></table></div>';
             
@@ -1439,35 +1456,6 @@ function updateLapResults() {
             if (mapDiv && mapDiv.parentElement) {
                 mapDiv.parentElement.parentElement.insertAdjacentHTML('beforeend', html);
             }
-            
-            var dirBtn = document.getElementById('dir-toggle-btn');
-            if (dirBtn) {
-                dirBtn.addEventListener('click', toggleDirection);
-            }
-        }
-
-        function toggleDirection() {
-            if (state.directionOverride) {
-                state.directionOverride = null;
-            } else {
-                var currentDir = state.lapResults.direction;
-                if (currentDir) {
-                    state.directionOverride = currentDir === 'clockwise' ? 'counter-clockwise' : 'clockwise';
-                }
-            }
-            
-            if (state.sfLine && state.sfLine.start && state.sfLine.end) {
-                state.lapResults = window.detectLaps(state.telemetry.data, state.sfLine, { cooldown: 10, direction: state.directionOverride });
-                
-                if (state.sectorLines.length > 0) {
-                    var sectorResult = window.detectSectors(state.telemetry.data, state.sfLine, state.sectorLines, state.lapResults.laps);
-                    state.lapResults.laps = sectorResult.laps;
-                    state.lapResults.sectorIndices = sectorResult.sectorIndices;
-                }
-            }
-            
-            updateLapResults();
-            updateLapLabels();
         }
 
         // Chart zoom/pan functions

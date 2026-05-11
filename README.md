@@ -7,9 +7,11 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 - **Video Playback**: Watch your GoPro video while viewing telemetry
 - **Speed Chart**: Speed vs time with vertical cursor sync
 - **G-Force Chart**: Longitudinal (acceleration/braking, red) and lateral (cornering, green) G-forces
-- **Track Map**: GPS track overlay on OpenStreetMap
+- **Track Map**: GPS track overlay on satellite imagery (ESRI World Imagery)
 - **Lap Detection**: Automatic lap time calculation with S/F line placement
 - **Sector Timing**: Up to 3 sectors with per-sector time tracking
+- **Theoretical Best Lap**: Sum of best sector times across all laps
+- **Best Sector Highlighting**: Fastest sector times highlighted in purple
 - **Real-time Updates**: Telemetry values update as video plays
 - **Lap Timer Overlay**: Live lap time, best lap, and sector times on video
 - **Lap Labels on Charts**: Visual lap boundaries with clickable labels to jump to lap start
@@ -89,6 +91,8 @@ http://localhost:3001
    - Click two points on the map to define the sector line (within 20m)
    - Repeat to add a second sector line (maximum 2 sectors = 3 total sectors)
    - Sector times appear in the lap time table and video overlay
+   - Theoretical best lap time (sum of fastest sector times) shown in summary line
+   - Fastest sector times highlighted in purple
 
 8. **Update Sectors**:
    - When sector lines differ from what's saved on the current track, a blue "Update Sectors" button appears
@@ -159,11 +163,16 @@ http://localhost:3001
 
 ## Supported GoPro Models
 
-- Hero13 Black (GPS9 format)
-- Hero11 Black
-- Other models with GPS telemetry
+- Hero5 Black (GPS5 format)
+- Hero6 Black (GPS5)
+- Hero7 Black (GPS5)
+- Hero8 Black (GPS5)
+- Hero9 Black (GPS5)
+- Hero10 Black (GPS5)
+- Hero11 Black (GPS5 + GPS9)
+- Hero13 Black (GPS9)
 
-> **Note:** Hero12 Black does not include GPS telemetry data and is not supported.
+> **Note:** Hero12 Black does not include GPS telemetry data and is not supported. Hero10 Black Bones also lacks GPS hardware.
 
 ## Notes
 
@@ -174,6 +183,8 @@ http://localhost:3001
 - Maximum video duration: ~30 minutes (20,000 GPS points, 400,000 accelerometer points)
 - Lap detection uses 20m S/F line with GPS track crossing detection
 - Sector lines are ordered by time from S/F (shortest time = S1)
+- Theoretical best = sum of fastest sector times across all laps; shown when sectors are defined
+- Best sector times highlighted in purple in the lap time table
 - Maximum 2 sector lines (3 total sectors per lap)
 - G-force display: gz = longitudinal (red), gy = lateral (green) - also reflected in chart and overlay colors
 - Max G-force shown is horizontal G-force = sqrt(gy² + gz²) (excludes vertical)

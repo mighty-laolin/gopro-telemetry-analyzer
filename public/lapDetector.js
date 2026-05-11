@@ -11,11 +11,11 @@ export function detectLaps(gpsData, sfLine, options = {}) {
     const cooldown = options.cooldown || 10;
     
     if (!gpsData || gpsData.length === 0) {
-        return { laps: [], bestLap: null, direction: null };
+        return { laps: [], bestLap: null, bestLapIndex: -1 };
     }
     
     if (!sfLine || !sfLine.start || !sfLine.end) {
-        return { laps: [], bestLap: null, direction: null, error: 'No S/F line defined' };
+        return { laps: [], bestLap: null, bestLapIndex: -1, error: 'No S/F line defined' };
     }
     
     const { start, end } = sfLine;
@@ -39,7 +39,7 @@ export function detectLaps(gpsData, sfLine, options = {}) {
     
     if (sfLen < 0.000001) {
         console.log('ERROR: S/F line has zero length');
-        return { laps: [], bestLap: null, direction: null, error: 'Invalid S/F line' };
+        return { laps: [], bestLap: null, bestLapIndex: -1, error: 'Invalid S/F line' };
     }
     
     // Tolerance for numerical precision (in degrees, ~1 meter at equator)
@@ -167,12 +167,8 @@ export function detectLaps(gpsData, sfLine, options = {}) {
     
     if (crossings.length < 2) {
         console.log('ERROR: Not enough crossings');
-        return { laps: [], bestLap: null, direction: null, error: 'No crossings detected' };
+        return { laps: [], bestLap: null, bestLapIndex: -1, error: 'No crossings detected' };
     }
-    
-    // Direction detection removed - was unreliable due to S/F line orientation
-    // and track position affecting uDiff sign
-    const direction = null;
     
     // Step 2: Extract lap times from crossings
     // Every crossing after the first marks the end of a lap and start of the next
@@ -290,9 +286,9 @@ export function detectLaps(gpsData, sfLine, options = {}) {
     return {
         laps: laps,
         bestLap: bestLap,
+        bestLapIndex: bestLapIndex,
         bestLapReference: bestLapReference,
         lapReferences: lapReferences,
-        direction: direction,
         crossingCount: crossings.length
     };
 }
@@ -482,10 +478,34 @@ export function detectSectors(gpsData, sfLine, sectorLines, laps) {
         console.log(`Lap ${lap.lap}: sectorTimes =`, lap.sectorTimes);
     }
     
+    const bestSectorTimes = { s1: null, s2: null, s3: null };
+    for (const lap of laps) {
+        if (lap.sectorTimes) {
+            if (lap.sectorTimes.s1 !== null && (bestSectorTimes.s1 === null || lap.sectorTimes.s1 < bestSectorTimes.s1)) {
+                bestSectorTimes.s1 = lap.sectorTimes.s1;
+            }
+            if (lap.sectorTimes.s2 !== null && (bestSectorTimes.s2 === null || lap.sectorTimes.s2 < bestSectorTimes.s2)) {
+                bestSectorTimes.s2 = lap.sectorTimes.s2;
+            }
+            if (lap.sectorTimes.s3 !== null && (bestSectorTimes.s3 === null || lap.sectorTimes.s3 < bestSectorTimes.s3)) {
+                bestSectorTimes.s3 = lap.sectorTimes.s3;
+            }
+        }
+    }
+
+    let theoreticalBest = null;
+    if (bestSectorTimes.s1 !== null && bestSectorTimes.s3 !== null) {
+        theoreticalBest = (bestSectorTimes.s2 !== null)
+            ? bestSectorTimes.s1 + bestSectorTimes.s2 + bestSectorTimes.s3
+            : bestSectorTimes.s1 + bestSectorTimes.s3;
+    }
+
     console.log('=== END SECTOR DEBUG ===\n');
     
     return {
         laps: laps,
-        sectorIndices: orderedSectorIndices
+        sectorIndices: orderedSectorIndices,
+        bestSectorTimes: bestSectorTimes,
+        theoreticalBest: theoreticalBest
     };
 }

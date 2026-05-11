@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.9.2] - 2026-05-11
+
+### Added
+- Theoretical best lap time: sum of fastest sector times across all laps, displayed in lap times summary
+- Best sector highlighting: fastest sector times shown in purple in lap time table
+- `lapTimes.best` and `lapTimes.theoreticalBest` translation keys (EN + ZH)
+- `bestSectorTimes` and `theoreticalBest` returned from `detectSectors()` in `lapDetector.js`
+
+### Changed
+- Map switched from OpenStreetMap to ESRI World Imagery satellite tiles (no API key needed)
+- Best lap row highlighted in purple in lap time table
+- Removed direction display and "Swap direction" button from lap time table (was unused in detection logic)
+- Removed `toggleDirection()` function and `state.directionOverride` (dead code)
+- Removed `direction: null` from `detectLaps()` return in `lapDetector.js` (was always null)
+
+### Fixed
+- Missing `bestSectorTimes`/`theoreticalBest` merge at two `detectSectors` call sites in index.html
+- Missing `lapTimes.best` and `lapTimes.theoreticalBest` translation keys caused raw key names to display
+
 ## [Unreleased]
 
 ### Added
