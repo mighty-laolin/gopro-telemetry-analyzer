@@ -10,6 +10,7 @@
 #include "GPMF_mp4reader.h"
 
 #define GPS9_SAMPLES 9
+#define GPS5_SAMPLES 5
 
 typedef struct {
     double timestamp;
@@ -84,6 +85,43 @@ void write_gps9_data(GPMF_stream* ms, double in, double out, int payload_idx) {
             pt.speed3d = sample[4] * 3.6;
             pt.dop = sample[7];
             pt.fix = (int)sample[8];
+
+            gps_points[gps_count++] = pt;
+        }
+    }
+
+    free(buffer);
+}
+
+void write_gps5_data(GPMF_stream* ms, double in, double out, int payload_idx) {
+    uint32_t samples = GPMF_Repeat(ms);
+    uint32_t elements = GPMF_ElementsInStruct(ms);
+
+    if (elements != GPS5_SAMPLES) {
+        return;
+    }
+
+    uint32_t buffersize = samples * elements * sizeof(double);
+    double* buffer = (double*)malloc(buffersize);
+    if (!buffer) return;
+
+    if (GPMF_OK == GPMF_ScaledData(ms, buffer, buffersize, 0, samples, GPMF_TYPE_DOUBLE)) {
+        double sample_duration = (out - in) / samples;
+
+        for (uint32_t i = 0; i < samples; i++) {
+            if (gps_count >= MAX_GPS_POINTS) break;
+
+            double* sample = &buffer[i * elements];
+
+            GPSPoint pt;
+            pt.timestamp = in + i * sample_duration;
+            pt.lat = sample[0];
+            pt.lon = sample[1];
+            pt.altitude = sample[2];
+            pt.speed2d = sample[3] * 3.6;
+            pt.speed3d = sample[4] * 3.6;
+            pt.dop = 0;
+            pt.fix = 0;
 
             gps_points[gps_count++] = pt;
         }
@@ -422,6 +460,7 @@ int main(int argc, char* argv[]) {
 
     uint32_t payloadsize = 0;
     size_t payloadres = 0;
+    int gps_format = 0; // 0=unknown, 9=GPS9, 5=GPS5
 
     for (uint32_t index = 0; index < num_payloads; index++) {
         double in = 0.0, out = 0.0;
@@ -436,8 +475,20 @@ int main(int argc, char* argv[]) {
 
         GPMF_Init(ms, payload, payloadsize);
 
-        while (GPMF_OK == GPMF_FindNext(ms, STR2FOURCC("GPS9"), GPMF_RECURSE_LEVELS | GPMF_TOLERANT)) {
-            write_gps9_data(ms, in, out, index);
+        if (gps_format != 5) {
+            while (GPMF_OK == GPMF_FindNext(ms, STR2FOURCC("GPS9"), GPMF_RECURSE_LEVELS | GPMF_TOLERANT)) {
+                gps_format = 9;
+                write_gps9_data(ms, in, out, index);
+            }
+        }
+
+        GPMF_ResetState(ms);
+
+        if (gps_format != 9) {
+            while (GPMF_OK == GPMF_FindNext(ms, STR2FOURCC("GPS5"), GPMF_RECURSE_LEVELS | GPMF_TOLERANT)) {
+                gps_format = 5;
+                write_gps5_data(ms, in, out, index);
+            }
         }
 
         GPMF_ResetState(ms);

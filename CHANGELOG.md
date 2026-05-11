@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.9.2.1] - 2026-05-11
+
+### Added
+- GPS5 auto-detection in `gps_parser_gpmf.c`: Hero5-10 (GPS5 format) now work alongside Hero11-13 (GPS9)
+- `write_gps5_data()` function for parsing GPS5 payloads (5 elements: lat, lon, alt, speed2d, speed3d at 18Hz)
+- `gps_format` state variable: 0=unknown, 9=GPS9, 5=GPS5; locks format after first detection for efficiency
+- Sector lines added to track in `tracks.json`
+
+### Changed
+- Rebuilt `gps_parser_gpmf` (macOS) and `gps_parser_gpmf_linux` (Linux) binaries with GPS5 support
+- Untracked `playwright.config.ts`, `tests/`, `specs/` from git (added to `.gitignore`, removed from tracking)
+
+### Fixed
+- "No GPS data found" on Linux for Hero5-10 videos (Linux binary was built from GPS9-only source)
+
 ## [v0.9.2] - 2026-05-11
 
 ### Added

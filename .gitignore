@@ -10,3 +10,6 @@ uploads/
 PRD.html
 PRD.md
 opencode.json
+playwright.config.ts
+tests/
+specs/
