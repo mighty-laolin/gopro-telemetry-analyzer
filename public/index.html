@@ -134,7 +134,8 @@
             selectedSectorIndex: null,
             storedTracks: [],
             selectedTrackId: null,
-            language: 'en'
+            language: 'en',
+            tracksReadOnly: false
         };
 
         // Translations
@@ -1128,7 +1129,7 @@ return smoothed;
             var btn = document.getElementById('save-track-btn');
             if (!btn) return;
 
-            var show = state.sfLine && state.sfLine.start && state.sfLine.end && !state.selectedTrackId;
+            var show = state.sfLine && state.sfLine.start && state.sfLine.end && !state.selectedTrackId && !state.tracksReadOnly;
             btn.classList.toggle('hidden', !show);
         }
 
@@ -1136,7 +1137,7 @@ return smoothed;
             var btn = document.getElementById('update-track-btn');
             if (!btn) return;
 
-            if (!state.selectedTrackId || (state.sfLine && state.sfLine.__placing)) {
+            if (!state.selectedTrackId || (state.sfLine && state.sfLine.__placing) || state.tracksReadOnly) {
                 btn.classList.add('hidden');
                 return;
             }
@@ -1989,6 +1990,9 @@ function updateLapResults() {
 
         // Start
         loadStoredTracks();
+        fetch('/api/health').then(function(r) { return r.json(); }).then(function(data) {
+            state.tracksReadOnly = !!data.tracksReadOnly;
+        }).catch(function() {});
         render();
     })();
     </script>

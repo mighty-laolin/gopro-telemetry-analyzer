@@ -178,8 +178,10 @@ app.post('/api/extract-gpmf', uploadSmall.fields([{ name: 'gpmf_data', maxCount:
     }
 });
 
+const TRACKS_READ_ONLY = process.env.TRACKS_READ_ONLY === 'true';
+
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', tracksReadOnly: TRACKS_READ_ONLY });
 });
 
 app.get('/api/tracks', (req, res) => {
@@ -198,6 +200,9 @@ app.get('/api/tracks', (req, res) => {
 });
 
 app.post('/api/tracks', (req, res) => {
+    if (TRACKS_READ_ONLY) {
+        return res.status(403).json({ error: 'Track writes are disabled on this server' });
+    }
     const newTrack = req.body;
     if (!newTrack || !newTrack.name || !newTrack.sfLine || !newTrack.sfLine.start || !newTrack.sfLine.end) {
         return res.status(400).json({ error: 'Invalid track data' });
@@ -219,6 +224,9 @@ app.post('/api/tracks', (req, res) => {
 });
 
 app.put('/api/tracks/:id', (req, res) => {
+    if (TRACKS_READ_ONLY) {
+        return res.status(403).json({ error: 'Track writes are disabled on this server' });
+    }
     const trackId = req.params.id;
     const sectorLines = req.body.sectorLines;
 

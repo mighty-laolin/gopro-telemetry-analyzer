@@ -192,5 +192,6 @@ http://localhost:3001
 - Track auto-detection: matches stored S/F lines within ~1km margin; if multiple tracks match, no auto-detection occurs
 - Sector lines are persisted with tracks and restored on track load
 - Track library API: `POST /api/tracks` (create), `PUT /api/tracks/:id` (update sectors), `GET /api/tracks` (list)
+- Read-only track mode: set `TRACKS_READ_ONLY=true` environment variable to disable track creation/updates on the server (useful for public deployments); users can still place S/F lines and sectors in their session
 - Double-click on charts: video jumps to clicked timestamp
 - Language toggle: click "切换语言" button in header to switch between English and Chinese

@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.9.3] - 2026-05-12
+
+### Added
+- `TRACKS_READ_ONLY` environment variable: set to `true` to disable track creation/updates on the server (useful for public deployments)
+- `tracksReadOnly` field in `/api/health` response
+- Frontend hides "Save Track" and "Update Sectors" buttons when `tracksReadOnly` is true
+- Sector lines added to track in `tracks.json`
+
+### Changed
+- Server returns 403 on `POST /api/tracks` and `PUT /api/tracks/:id` when `TRACKS_READ_ONLY=true`
+- Untracked `playwright.config.ts`, `tests/`, `specs/` from git (added to `.gitignore`)
+
 ## [v0.9.2.1] - 2026-05-11
 
 ### Added
