@@ -1,5 +1,39 @@
 # Changelog
 
+## [v0.9.4] - 2026-05-12
+
+### Added
+- Two-column dashboard layout: charts + lap times on the left, video + map on the right
+- Full-width dashboard (no max-width constraint, uses entire browser viewport)
+- Dynamic chart height sync: chart canvases resize to align with video card bottom edge
+- Map card minimum height set to match video card height
+- Lap times table with internal scrolling when content exceeds available space
+- `syncChartHeights()` function for responsive chart/map sizing
+- Window resize handler: charts, lap labels, and map re-adjust on viewport change
+- Telemetry points count added to stats strip
+- `stats.points` translation key (EN: "Telemetry Points", ZH: "遥测点")
+
+### Changed
+- **Renamed to RaceLens**: app title is now "RaceLens" (large, bold, italic) with "GoPro Telemetry Analyzer" as subtitle
+- Page title: "RaceLens — GoPro Telemetry Analyzer"
+- "RaceLens" always displayed in English regardless of language setting
+- Dashboard container changed from `max-w-7xl` single column to `grid-cols-[55fr_45fr]` two-column grid
+- Removed section navigation pills bar (no longer needed with visible-at-once layout)
+- Removed header subtitle from dashboard (moved to below RaceLens logo)
+- Removed `#telemetry-msg` banner (point count moved to stats strip)
+- Removed scroll-related CSS (`scroll-behavior: smooth`, `scroll-padding-top`)
+- Stats row changed from 5 large cards to compact pill-shaped badges
+- Track name displayed larger and in red (`text-2xl font-extrabold text-red-600`)
+- Chart canvas height dynamically calculated from video card height (was fixed 256px→320px→dynamic)
+- Map zoom increased: `maxZoom: 19`, `maxNativeZoom: 19` on ESRI tile layer
+- Video card: removed "Video Playback" title, uses `aspect-ratio: 16/9`, reduced padding
+- `updateLapResults()` writes into existing `#lap-times-content` div instead of dynamically injecting after map
+- `renderDashboard()`: renamed telemetry variable from `t` to `telem` to avoid shadowing translation function `t()`
+
+### Fixed
+- Lap labels positioned below time axis on initial render (added delayed `updateLapLabels()` call + fixed canvas height)
+- TypeError in `renderDashboard()` where `t('stats.unknownTrack')` called telemetry object instead of translation function
+
 ## [v0.9.3] - 2026-05-12
 
 ### Added

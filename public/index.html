@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoPro Telemetry Analyzer</title>
+    <title>RaceLens — GoPro Telemetry Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -18,10 +18,6 @@
         window.computeMaxHorizontalGForce = computeMaxHorizontalGForce;
     </script>
     <style>
-        html {
-            scroll-behavior: smooth;
-            scroll-padding-top: 120px;
-        }
         .sticky {
             z-index: 9999 !important;
         }
@@ -141,8 +137,8 @@
         // Translations
         var translations = {
             en: {
-                'app.title': 'GoPro Telemetry Analyzer',
-                'app.subtitle': 'Extract GPS & telemetry from GoPro videos',
+                'app.title': 'RaceLens',
+                'app.subtitle': 'GoPro Telemetry Analyzer',
                 'nav.uploadNew': 'Upload New Video',
                 'nav.video': 'Video',
                 'nav.stats': 'Stats',
@@ -158,6 +154,7 @@
                 'stats.maxGforce': 'Max G-Force',
                 'stats.distance': 'Distance',
                 'stats.duration': 'Duration',
+                'stats.points': 'Telemetry Points',
                 'charts.speedVsTime': 'Speed vs Time',
                 'charts.gforceVsTime': 'G-Force vs Time',
                 'charts.speed': 'Speed',
@@ -198,8 +195,8 @@
                 'lang.toggle': '中文'
             },
             zh: {
-                'app.title': 'GoPro 遥测分析器',
-                'app.subtitle': '从 GoPro 视频中提取 GPS 和遥测数据',
+                'app.title': 'RaceLens',
+                'app.subtitle': 'GoPro 遥测分析器',
                 'nav.uploadNew': '上传新视频',
                 'nav.video': '视频',
                 'nav.stats': '统计',
@@ -215,6 +212,7 @@
                 'stats.maxGforce': '最大G力',
                 'stats.distance': '距离',
                 'stats.duration': '时长',
+                'stats.points': '遥测点',
                 'charts.speedVsTime': '速度 vs 时间',
                 'charts.gforceVsTime': 'G值图表',
                 'charts.speed': '速度',
@@ -469,7 +467,7 @@ return smoothed;
             return '<div class="min-h-screen bg-slate-50">' +
                 '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
-                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<h1 id="header-title" class="text-2xl font-bold italic">RaceLens</h1>' +
                 '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
                 '</div>' +
                 '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
@@ -496,7 +494,7 @@ return smoothed;
             return '<div class="min-h-screen bg-slate-50">' +
                 '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
-                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<h1 id="header-title" class="text-2xl font-bold italic">RaceLens</h1>' +
                 '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
                 '</div>' +
                 '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
@@ -514,7 +512,7 @@ return smoothed;
             return '<div class="min-h-screen bg-slate-50">' +
                 '<header class="bg-blue-600 text-white py-4 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
-                '<h1 id="header-title" class="text-2xl font-bold">' + t('app.title') + '</h1>' +
+                '<h1 id="header-title" class="text-2xl font-bold italic">RaceLens</h1>' +
                 '<p id="header-subtitle" class="text-blue-200 text-sm">' + t('app.subtitle') + '</p>' +
                 '</div>' +
                 '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">' + (lang === 'zh' ? 'Switch Language' : '切换语言') + '</button>' +
@@ -523,43 +521,70 @@ return smoothed;
         }
 
         function renderDashboard() {
-            var t = state.telemetry;
-            var maxHGFResult = t.data ? computeMaxHorizontalGForce(t.data) : { value: 0, timestamp: 0 };
-            console.log('Max Horizontal G:', maxHGFResult.value, 'at time:', maxHGFResult.timestamp);
+            var telem = state.telemetry;
+            var maxHGFResult = telem.data ? computeMaxHorizontalGForce(telem.data) : { value: 0, timestamp: 0 };
 
-            var maxSpeed = (t.maxSpeed || 0).toFixed(1);
-            var avgSpeed = (t.avgSpeed || 0).toFixed(1);
-            var totalDistance = (t.totalDistance || 0).toFixed(2);
-            var duration = (t.duration || 0).toFixed(0);
+            var maxSpeed = (telem.maxSpeed || 0).toFixed(1);
+            var avgSpeed = (telem.avgSpeed || 0).toFixed(1);
+            var totalDistance = (telem.totalDistance || 0).toFixed(2);
+            var duration = (telem.duration || 0).toFixed(0);
+            var gpsPoints = telem.gpsPoints || 0;
+
+            var trackName = t('stats.unknownTrack');
+            if (state.selectedTrackId) {
+                var track = state.storedTracks.find(function(tr) { return tr.id === state.selectedTrackId; });
+                if (track) trackName = track.name;
+            }
 
             var html = '<div class="min-h-screen bg-slate-50">' +
-                '<div class="sticky top-0 z-50">' +
-                '<header class="bg-blue-600 text-white py-3 px-6 shadow-lg flex justify-between items-center">' +
+                '<header class="sticky top-0 z-50 bg-blue-600 text-white py-3 px-6 shadow-lg flex justify-between items-center">' +
                 '<div>' +
-                '<h1 id="header-title" class="text-2xl font-bold">GoPro Telemetry Analyzer</h1>' +
-                '<p id="header-subtitle" class="text-blue-200 text-sm">Extract GPS & telemetry from GoPro videos</p>' +
+                '<h1 id="header-title" class="text-3xl font-bold italic tracking-tight">RaceLens</h1>' +
+                '<p id="header-subtitle" class="text-blue-200 text-xs">GoPro Telemetry Analyzer</p>' +
                 '</div>' +
                 '<div class="flex items-center gap-3">' +
                 '<button id="lang-toggle-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">切换语言</button>' +
                 '<button id="reupload-btn" class="px-4 py-2 rounded-lg text-blue-600 bg-white hover:bg-blue-50 border-2 border-blue-600">Upload New Video</button>' +
                 '</div>' +
                 '</header>' +
-                '<nav class="bg-slate-100 px-4 py-2 flex gap-2 overflow-x-auto">' +
-                '<a id="nav-video" href="#video" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Video</a>' +
-                '<a id="nav-stats" href="#stats" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Stats</a>' +
-                '<a id="nav-speedChart" href="#speed-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Speed Chart</a>' +
-                '<a id="nav-gforceChart" href="#gforce-chart" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">G-Force Chart</a>' +
-                '<a id="nav-map" href="#map" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Map</a>' +
-                '<a id="nav-lapTimes" href="#lap-times" class="px-3 py-1 bg-white rounded-full text-sm text-slate-700 hover:bg-blue-100">Lap Times</a>' +
-                '</nav>' +
+                '<div class="px-4 py-4">' +
+                '<div class="text-center mb-3">' +
+                '<p id="stats-track-label" class="text-slate-500 text-sm">Track</p>' +
+                '<p id="stats-track-name" class="text-2xl font-extrabold text-red-600">' + trackName + '</p>' +
                 '</div>' +
-                '<main class="max-w-7xl mx-auto p-6 space-y-6">';
+                '<div class="flex flex-wrap justify-center gap-3 mb-4">' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-maxSpeed" class="text-slate-500">Max Speed</span> <span class="font-bold text-blue-600">' + maxSpeed + ' km/h</span></div>' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-avgSpeed" class="text-slate-500">Avg Speed</span> <span class="font-bold text-blue-600">' + avgSpeed + ' km/h</span></div>' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-maxGforce" class="text-slate-500">Max G-Force</span> <span class="font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</span></div>' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-distance" class="text-slate-500">Distance</span> <span class="font-bold text-purple-600">' + totalDistance + ' km</span></div>' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-duration" class="text-slate-500">Duration</span> <span class="font-bold text-orange-600">' + duration + 's</span></div>' +
+                '<div class="bg-white rounded-full shadow-sm px-4 py-2 text-sm"><span id="stat-points" class="text-slate-500">Points</span> <span class="font-bold text-slate-500">' + gpsPoints + '</span></div>' +
+                '</div>' +
+                '<div class="grid grid-cols-[55fr_45fr] gap-6" style="min-width:1024px">';
 
-            // Video
-            html += '<div id="video" class="bg-white rounded-lg shadow-md p-4 mb-6">' +
-                '<h2 id="video-title" class="text-lg font-semibold mb-3">Video Playback</h2>' +
-                '<div class="relative" style="max-width:100%">' +
-                '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls></video>' +
+            // Left column: Charts + Lap Times
+            html += '<div class="flex flex-col gap-6">' +
+                '<div id="charts-wrapper" class="flex flex-col gap-6">' +
+                '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative">' +
+                '<h2 id="speed-chart-title" class="text-lg font-semibold mb-3">Speed vs Time</h2>' +
+                '<div id="speed-chart-container" class="relative"><canvas id="speed-chart-canvas" class="w-full"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div>' +
+                '</div>' +
+                '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative">' +
+                '<h2 id="gforce-chart-title" class="text-lg font-semibold mb-3">G-Force vs Time</h2>' +
+                '<div id="gforce-chart-container" class="relative"><canvas id="gforce-chart-canvas" class="w-full"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div>' +
+                '</div>' +
+                '</div>' +
+                '<div id="lap-times" class="bg-white rounded-lg shadow p-4">' +
+                '<h2 id="lap-times-title" class="text-lg font-semibold mb-3">' + t('lapTimes.title') + '</h2>' +
+                '<div id="lap-times-content" style="overflow-y:auto"></div>' +
+                '</div>' +
+                '</div>';
+
+            // Right column: Video + Map
+            html += '<div class="flex flex-col gap-6">' +
+                '<div id="video" class="bg-white rounded-lg shadow p-3 flex-shrink-0">' +
+                '<div class="relative">' +
+                '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls style="aspect-ratio:16/9"></video>' +
                 '<div id="lap-timer-overlay" style="display:none;position:absolute;top:16px;left:16px;background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:8px;z-index:40;font-size:16px;min-width:290px">' +
                 '<div style="display:flex;align-items:center;gap:12px;white-space:nowrap">' +
                 '<span style="min-width:60px">LAP <span id="current-lap-num" style="font-weight:bold">-</span></span>' +
@@ -576,36 +601,9 @@ return smoothed;
                 '<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span id="speed-display" class="font-bold">0 km/h</span></div>' +
                 '<div style="display:flex;align-items:center;gap:6px;color:#ef4444"><span>LONG</span><span id="gy-display" class="font-bold">0.00</span><span>G</span></div>' +
                 '<div style="display:flex;align-items:center;gap:6px;color:#22c55e"><span>LAT</span><span id="gx-display" class="font-bold">0.00</span><span>G</span></div>' +
-                '</div></div>';
-
-            // Track name
-            var trackName = 'Unknown Track';
-            if (state.selectedTrackId) {
-                var track = state.storedTracks.find(function(t) { return t.id === state.selectedTrackId; });
-                if (track) trackName = track.name;
-            }
-            html += '<div id="stats" class="bg-white rounded-lg shadow p-4 text-center mb-6">' +
-                '<p id="stats-track-label" class="text-slate-500 text-sm">Track</p>' +
-                '<p id="stats-track-name" class="text-2xl font-bold text-black">' + trackName + '</p>' +
-                '</div>';
-
-            // Stats
-            html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxSpeed" class="text-slate-500 text-sm">Max Speed</p><p class="text-2xl font-bold text-blue-600">' + maxSpeed + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-avgSpeed" class="text-slate-500 text-sm">Avg Speed</p><p class="text-2xl font-bold text-blue-600">' + avgSpeed + ' km/h</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-maxGforce" class="text-slate-500 text-sm">Max G-Force</p><p class="text-2xl font-bold text-green-600">' + maxHGFResult.value.toFixed(2) + 'G</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-distance" class="text-slate-500 text-sm">Distance</p><p class="text-2xl font-bold text-purple-600">' + totalDistance + ' km</p></div>' +
-                '<div class="bg-white rounded-lg shadow p-4"><p id="stat-duration" class="text-slate-500 text-sm">Duration</p><p class="text-2xl font-bold text-orange-600">' + duration + 's</p></div>' +
-                '</div>';
-
-            // Speed Chart
-            html += '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 id="speed-chart-title" class="text-lg font-semibold mb-3">Speed vs Time</h2><div id="speed-chart-container" class="relative"><canvas id="speed-chart-canvas" class="w-full" style="height:256px"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div></div>';
-
-            // G-Force Chart
-            html += '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative mb-6"><h2 id="gforce-chart-title" class="text-lg font-semibold mb-3">G-Force vs Time</h2><div id="gforce-chart-container" class="relative"><canvas id="gforce-chart-canvas" class="w-full" style="height:256px"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div></div>';
-
-            // Map
-            html += '<div id="map" class="bg-white rounded-lg shadow p-4">' +
+                '</div></div>' +
+                '</div>' +
+                '<div id="map" class="bg-white rounded-lg shadow p-4 flex-1 flex flex-col">' +
                 '<div class="flex justify-between items-center mb-3">' +
                 '<h2 id="map-title" class="text-lg font-semibold">Track Map</h2>' +
                 '<div class="flex gap-2 items-center">' +
@@ -620,10 +618,11 @@ return smoothed;
                 '<button id="delete-sector-btn" class="px-4 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600 hidden">Delete Sector</button>' +
                 '</div>' +
                 '</div>' +
-                '<div id="map-container" class="h-96 rounded-lg"></div></div>';
+                '<div id="map-container" class="rounded-lg flex-1" style="min-height:350px;position:relative"></div>' +
+                '</div>' +
+                '</div>';
 
-            html += '<div id="telemetry-msg" class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-blue-800">Extracted <strong>' + (t.gpsPoints || 0) + '</strong> telemetry points</p></div>';
-            html += '</main></div>';
+            html += '</div></div></div>';
 
             return html;
         }
@@ -741,9 +740,14 @@ return smoothed;
 
             // Wait for DOM to settle then init
             setTimeout(function() {
+                syncChartHeights();
                 initMap();
                 initCharts();
                 startTelemetryUpdate();
+                if (state.map) {
+                    setTimeout(function() { state.map.invalidateSize(); }, 100);
+                }
+                setTimeout(function() { updateLapLabels(); }, 200);
             }, 50);
         }
 
@@ -755,7 +759,7 @@ return smoothed;
             if (toggleBtn) toggleBtn.textContent = lang === 'zh' ? 'Switch Language' : '切换语言';
 
             var headerTitle = document.getElementById('header-title');
-            if (headerTitle) headerTitle.textContent = t('app.title');
+            if (headerTitle) headerTitle.textContent = 'RaceLens';
             var headerSubtitle = document.getElementById('header-subtitle');
             if (headerSubtitle) headerSubtitle.textContent = t('app.subtitle');
 
@@ -766,22 +770,6 @@ return smoothed;
 
             var reuploadBtn = document.getElementById('reupload-btn');
             if (reuploadBtn) reuploadBtn.textContent = t('nav.uploadNew');
-
-            var navVideo = document.getElementById('nav-video');
-            if (navVideo) navVideo.textContent = t('nav.video');
-            var navStats = document.getElementById('nav-stats');
-            if (navStats) navStats.textContent = t('nav.stats');
-            var navSpeedChart = document.getElementById('nav-speedChart');
-            if (navSpeedChart) navSpeedChart.textContent = t('nav.speedChart');
-            var navGforceChart = document.getElementById('nav-gforceChart');
-            if (navGforceChart) navGforceChart.textContent = t('nav.gforceChart');
-            var navMap = document.getElementById('nav-map');
-            if (navMap) navMap.textContent = t('nav.map');
-            var navLapTimes = document.getElementById('nav-lapTimes');
-            if (navLapTimes) navLapTimes.textContent = t('nav.lapTimes');
-
-            var videoTitle = document.getElementById('video-title');
-            if (videoTitle) videoTitle.textContent = t('video.title');
 
             var statsTrackLabel = document.getElementById('stats-track-label');
             if (statsTrackLabel) statsTrackLabel.textContent = t('stats.track');
@@ -795,6 +783,11 @@ return smoothed;
             if (statDistance) statDistance.textContent = t('stats.distance');
             var statDuration = document.getElementById('stat-duration');
             if (statDuration) statDuration.textContent = t('stats.duration');
+            var statPoints = document.getElementById('stat-points');
+            if (statPoints) statPoints.textContent = t('stats.points');
+
+            var lapTimesTitle = document.getElementById('lap-times-title');
+            if (lapTimesTitle) lapTimesTitle.textContent = t('lapTimes.title');
 
             var speedChartTitle = document.getElementById('speed-chart-title');
             if (speedChartTitle) speedChartTitle.textContent = t('charts.speedVsTime');
@@ -817,11 +810,6 @@ return smoothed;
             if (sectorBtn) updateSectorButton();
             var deleteSectorBtn = document.getElementById('delete-sector-btn');
             if (deleteSectorBtn) deleteSectorBtn.textContent = t('map.deleteSector');
-
-            var telemetryMsg = document.getElementById('telemetry-msg');
-            if (telemetryMsg) {
-                telemetryMsg.innerHTML = t('msg.extracted') + ' <strong>' + (state.telemetry ? state.telemetry.gpsPoints : '?') + '</strong> ' + t('msg.telemetryPoints');
-            }
         }
 
         function handleFileUpload(e) {
@@ -1215,9 +1203,11 @@ return smoothed;
             var center = [(Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2, 
                          (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2];
 
-            state.map = L.map('map-container').setView(center, 17);
+            state.map = L.map('map-container', { maxZoom: 19 }).setView(center, 17);
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '© Esri, Maxar, Earthstar Geographics'
+                attribution: '© Esri, Maxar, Earthstar Geographics',
+                maxZoom: 19,
+                maxNativeZoom: 19
             }).addTo(state.map);
 
             var positions = data.map(function(d) { return [d.lat, d.lon]; });
@@ -1399,10 +1389,12 @@ return smoothed;
 
 function updateLapResults() {
             var lr = state.lapResults;
-            var existing = document.getElementById('lap-times');
-            if (existing) existing.remove();
+            var container = document.getElementById('lap-times-content');
 
-            if (!lr || !lr.laps || lr.laps.length === 0) return;
+            if (!lr || !lr.laps || lr.laps.length === 0) {
+                if (container) container.innerHTML = '';
+                return;
+            }
 
             var sectorCount = state.sectorLines.length;
             var bestSectors = lr.bestSectorTimes || null;
@@ -1418,9 +1410,7 @@ function updateLapResults() {
                 summaryHtml += ' | ' + t('lapTimes.theoreticalBest') + ' ' + lr.theoreticalBest.toFixed(3) + 's';
             }
 
-            var html = '<div id="lap-times" class="bg-white rounded-lg shadow p-4 mb-6">' +
-                '<h2 class="text-lg font-semibold mb-3">' + t('lapTimes.title') + '</h2>' +
-                '<p class="text-sm text-slate-500 mb-2">' + summaryHtml + '</p>' +
+            var html = '<p class="text-sm text-slate-500 mb-2">' + summaryHtml + '</p>' +
                 '<table class="w-full text-left"><thead><tr class="border-b"><th class="py-2">' + t('lapTimes.lap') + '</th><th class="py-2">' + t('lapTimes.time') + '</th>' + sectorHeaderHtml + '<th class="py-2">' + t('lapTimes.delta') + '</th><th class="py-2">' + t('lapTimes.maxSpeed') + '</th><th class="py-2">' + t('lapTimes.minSpeed') + '</th></tr></thead><tbody>';
             for (var i = 0; i < lr.laps.length; i++) {
                 var lap = lr.laps[i];
@@ -1451,11 +1441,40 @@ function updateLapResults() {
 
                 html += '<tr class="' + rowClass + '"><td class="py-2">' + lap.lap + '</td><td class="' + lapTimeClass + '">' + lap.duration.toFixed(3) + 's</td>' + sectorCellsHtml + '<td class="py-2 ' + deltaClass + '">' + (lap.delta >= 0 ? '+' : '') + lap.delta.toFixed(3) + 's</td><td class="py-2">' + lap.maxSpeed.toFixed(1) + ' km/h</td><td class="py-2">' + lap.minSpeed.toFixed(1) + ' km/h</td></tr>';
             }
-            html += '</tbody></table></div>';
-            
-            var mapDiv = document.getElementById('map');
-            if (mapDiv && mapDiv.parentElement) {
-                mapDiv.parentElement.parentElement.insertAdjacentHTML('beforeend', html);
+            html += '</tbody></table>';
+
+            if (container) container.innerHTML = html;
+            setTimeout(function() { syncChartHeights(); }, 50);
+        }
+
+        function syncChartHeights() {
+            var videoCard = document.getElementById('video');
+            var chartsWrapper = document.getElementById('charts-wrapper');
+            var mapCard = document.getElementById('map');
+            var lapTimesContent = document.getElementById('lap-times-content');
+            var lapTimesCard = document.getElementById('lap-times');
+            if (!videoCard || !chartsWrapper) return;
+
+            var videoHeight = videoCard.offsetHeight;
+            if (mapCard) mapCard.style.minHeight = videoHeight + 'px';
+
+            var gap = 24;
+            var totalPadding = (16 * 2 + 28 + 12) * 2;
+            var canvasHeight = Math.max(100, Math.floor((videoHeight - totalPadding - gap) / 2));
+
+            var speedCanvas = document.getElementById('speed-chart-canvas');
+            var gforceCanvas = document.getElementById('gforce-chart-canvas');
+            if (speedCanvas) speedCanvas.style.height = canvasHeight + 'px';
+            if (gforceCanvas) gforceCanvas.style.height = canvasHeight + 'px';
+
+            if (state.speedChart) state.speedChart.canvas.style.height = canvasHeight + 'px';
+            if (state.gforceChart) state.gforceChart.canvas.style.height = canvasHeight + 'px';
+
+            if (lapTimesCard && lapTimesContent && chartsWrapper) {
+                var rightColMinHeight = videoHeight * 2 + gap;
+                var leftUsedHeight = chartsWrapper.offsetHeight + gap + 32 + 36;
+                var maxContentHeight = rightColMinHeight - leftUsedHeight;
+                lapTimesContent.style.maxHeight = Math.max(100, maxContentHeight) + 'px';
             }
         }
 
@@ -1661,7 +1680,7 @@ function updateLapResults() {
                         }
                     }
                 });
-                state.speedChart.canvas.style.height = '256px';
+                syncChartHeights();
                 
                 // Add zoom/pan event listeners to speed chart
                 speedCtx.addEventListener('wheel', function(e) { handleChartWheel(state.speedChart, e); });
@@ -1726,7 +1745,7 @@ function updateLapResults() {
                         }
                     }
                 });
-                state.gforceChart.canvas.style.height = '256px';
+                syncChartHeights();
                 
                 // Add zoom/pan event listeners to G-force chart
                 gCtx.addEventListener('wheel', function(e) { handleChartWheel(state.gforceChart, e); });
@@ -1987,6 +2006,13 @@ function updateLapResults() {
                 updateLapTimer();
             }, 100);
         }
+
+        window.addEventListener('resize', function() {
+            syncChartHeights();
+            if (state.speedChart) state.speedChart.resize();
+            if (state.gforceChart) state.gforceChart.resize();
+            setTimeout(function() { updateLapLabels(); }, 100);
+        });
 
         // Start
         loadStoredTracks();

@@ -1,13 +1,14 @@
-# GoPro Telemetry Analyzer
+# RaceLens — GoPro Telemetry Analyzer
 
-A web application that extracts and visualizes GPS and telemetry data from GoPro MP4 videos. Displays speed, G-forces, track map, lap times, and sector times.
+A web application that extracts and visualizes GPS and telemetry data from GoPro MP4 videos. Displays speed, G-forces, track map, lap times, and sector times with a two-column dashboard layout.
 
 ## Features
 
-- **Video Playback**: Watch your GoPro video while viewing telemetry
-- **Speed Chart**: Speed vs time with vertical cursor sync
+- **Two-Column Dashboard**: Charts and lap times on the left, video and map on the right — everything visible at once
+- **Video Playback**: Watch your GoPro video with real-time telemetry overlay (speed, G-forces)
+- **Speed Chart**: Speed vs time with zoom, pan, and lap labels
 - **G-Force Chart**: Longitudinal (acceleration/braking, red) and lateral (cornering, green) G-forces
-- **Track Map**: GPS track overlay on satellite imagery (ESRI World Imagery)
+- **Track Map**: GPS track overlay on satellite imagery (ESRI World Imagery), zoom up to level 19
 - **Lap Detection**: Automatic lap time calculation with S/F line placement
 - **Sector Timing**: Up to 3 sectors with per-sector time tracking
 - **Theoretical Best Lap**: Sum of best sector times across all laps
@@ -19,6 +20,7 @@ A web application that extracts and visualizes GPS and telemetry data from GoPro
 - **Max/Min Speed per Lap**: Lap time table shows top and bottom speed reached in each lap
 - **Double-Click to Seek**: Double-click anywhere on speed or G-force chart to seek video to that timestamp
 - **Chinese Language Support**: Toggle between English and Chinese (中文) via button in header
+- **Public Deployment Mode**: Set `TRACKS_READ_ONLY=true` to prevent users from modifying the track library
 
 ## Requirements
 
@@ -53,11 +55,9 @@ http://localhost:3001
 ## Usage
 
 1. **Upload Video**: Click on the upload area or drop a GoPro MP4 file. The app reads the MP4 structure locally in the browser, extracts only the small GPMF metadata payloads (~7MB for a typical file), and sends them to the server for parsing — no full video upload needed. If local extraction fails, it falls back to uploading the entire video to the server (shown with a warning banner).
-2. **View Dashboard**: Once processed, you'll see:
-   - Video player with real-time telemetry (speed, G-forces, altitude)
-   - Speed chart
-   - G-Force chart (longitudinal + lateral)
-   - Track map
+2. **View Dashboard**: Once processed, you'll see a two-column layout:
+   - Left: Speed chart, G-force chart, and lap times table
+   - Right: Video player (16:9) with telemetry overlay, and track map
 
 3. **Set Start/Finish Line**:
    - Click the green "Set S/F Line" button next to the map
@@ -186,8 +186,10 @@ http://localhost:3001
 - Theoretical best = sum of fastest sector times across all laps; shown when sectors are defined
 - Best sector times highlighted in purple in the lap time table
 - Maximum 2 sector lines (3 total sectors per lap)
+- Lap time table scrolls internally when many laps, keeping the dashboard compact
 - G-force display: gz = longitudinal (red), gy = lateral (green) - also reflected in chart and overlay colors
 - Max G-force shown is horizontal G-force = sqrt(gy² + gz²) (excludes vertical)
+- Map supports zoom up to level 19 (ESRI World Imagery satellite tiles)
 - Lap labels on charts: click to seek video to lap start time
 - Track auto-detection: matches stored S/F lines within ~1km margin; if multiple tracks match, no auto-detection occurs
 - Sector lines are persisted with tracks and restored on track load
@@ -195,3 +197,4 @@ http://localhost:3001
 - Read-only track mode: set `TRACKS_READ_ONLY=true` environment variable to disable track creation/updates on the server (useful for public deployments); users can still place S/F lines and sectors in their session
 - Double-click on charts: video jumps to clicked timestamp
 - Language toggle: click "切换语言" button in header to switch between English and Chinese
+- Dashboard uses full browser width with a 55/45 two-column grid layout
