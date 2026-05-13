@@ -565,14 +565,16 @@ return smoothed;
                 '<div class="grid gap-6" style="grid-template-columns:55fr 45fr">';
 
             // Left column: Charts + Lap Times
-            html += '<div class="flex flex-col gap-6" style="min-width:0">' +
-                '<div id="charts-wrapper" class="flex flex-col gap-6">' +
-                '<div id="speed-chart" class="bg-white rounded-lg shadow p-4 relative">' +
-                '<h2 id="speed-chart-title" class="text-lg font-semibold mb-3">Speed vs Time</h2>' +
+            html += '<div class="flex flex-col gap-2" style="min-width:0">' +
+                '<div id="charts-wrapper" class="flex flex-col gap-2">' +
+                '<div id="speed-chart" class="bg-white rounded-lg shadow p-2 relative">' +
+                '<h2 id="speed-chart-title" class="text-base font-semibold mb-1">Speed vs Time</h2>' +
                 '<div id="speed-chart-container" class="relative" style="min-width:0"><canvas id="speed-chart-canvas" class="w-full"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div>' +
                 '</div>' +
-                '<div id="gforce-chart" class="bg-white rounded-lg shadow p-4 relative">' +
-                '<h2 id="gforce-chart-title" class="text-lg font-semibold mb-3">G-Force vs Time</h2>' +
+                '<div id="gforce-chart" class="bg-white rounded-lg shadow p-2 relative">' +
+                '<div class="flex items-center gap-3 mb-1"><h2 id="gforce-chart-title" class="text-base font-semibold">G-Force vs Time</h2>' +
+                '<span style="font-size:12px;display:flex;align-items:center;gap:12px"><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:3px;background:#ef4444;border-radius:1px"></span>' + t('charts.longitudinal') + '</span>' +
+                '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:3px;background:#22c55e;border-radius:1px"></span>' + t('charts.lateral') + '</span></span></div>' +
                 '<div id="gforce-chart-container" class="relative" style="min-width:0"><canvas id="gforce-chart-canvas" class="w-full"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div>' +
                 '</div>' +
                 '</div>' +
@@ -583,7 +585,7 @@ return smoothed;
                 '</div>';
 
             // Right column: Video + Map
-            html += '<div class="flex flex-col gap-6" style="min-width:0">' +
+            html += '<div class="flex flex-col gap-2" style="min-width:0">' +
                 '<div id="video" class="bg-white rounded-lg shadow p-3 flex-shrink-0">' +
                 '<div class="relative">' +
                 '<video id="video-player" src="' + state.videoUrl + '" class="w-full rounded-lg bg-black" controls style="aspect-ratio:16/9"></video>' +
@@ -1468,8 +1470,8 @@ function updateLapResults() {
             var videoHeight = videoCard.offsetHeight;
             if (mapCard) mapCard.style.minHeight = videoHeight + 'px';
 
-            var gap = 24;
-            var totalPadding = (16 * 2 + 28 + 12) * 2;
+            var gap = 8;
+            var totalPadding = (8 * 2 + 24 + 4) * 2;
             var canvasHeight = Math.max(100, Math.floor((videoHeight - totalPadding - gap) / 2));
 
             var speedCanvas = document.getElementById('speed-chart-canvas');
@@ -1731,7 +1733,8 @@ function updateLapResults() {
                         normalized: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: true }
+                            legend: { display: false },
+                            title: { display: false }
                         },
                         scales: {
                             x: {
