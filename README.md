@@ -19,7 +19,7 @@ Open http://localhost:3001 — drop a GoPro MP4 file, and you're in.
 - **Video with telemetry overlay** — live speed, longitudinal/lateral G-force on top of the video
 - **Speed & G-force charts** — zoom (scroll), pan (drag), click yellow "Lap N" labels to jump to lap start
 - **Double-click charts to seek** — click any point on the speed or G-force chart to jump the video to that moment
-- **Track map** — ESRI satellite imagery, zoom to level 19; place S/F line and sector lines by clicking the map
+- **Track map** — ESRI satellite imagery, zoom to level 19; moving marker tracks kart position in sync with video; place S/F line and sector lines by clicking the map
 - **Lap detection** — automatic lap times with best lap highlighted in purple
 - **Sector timing** — up to 3 sectors with theoretical best lap (sum of fastest sectors) and purple-highlighted best sectors
 - **Track library** — save and auto-detect S/F lines by GPS coordinates; sector lines are persisted per track

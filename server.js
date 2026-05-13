@@ -31,38 +31,54 @@ function spawnBin(name, args) {
     return spawn(process.platform === 'win32' ? bin : './' + bin, args, { cwd: PARSER_DIR });
 }
 
-function parseTelemetry(inputPath) {
+function spawnWithTimeout(name, args, timeoutMs) {
     return new Promise((resolve, reject) => {
-        const absInputPath = path.isAbsolute(inputPath) ? inputPath : path.resolve(inputPath);
-        const proc = spawnBin('gps_parser', [absInputPath, '-json']);
-        
+        let settled = false;
+        const proc = spawnBin(name, args);
+
         let stdout = '';
         let stderr = '';
-        
-        proc.stdout.on('data', (data) => {
-            stdout += data.toString();
+
+        proc.stdout.on('data', (data) => { stdout += data.toString(); });
+        proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+        const timer = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                proc.kill();
+                reject(new Error(`${name} timed out after ${timeoutMs}ms`));
+            }
+        }, timeoutMs);
+
+        proc.on('error', (err) => {
+            if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                reject(new Error(`Failed to spawn ${name}: ${err.message}`));
+            }
         });
-        
-        proc.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-        
+
         proc.on('close', (code) => {
+            clearTimeout(timer);
+            if (settled) return;
+            settled = true;
+
             if (code !== 0) {
-                console.error('Parser error:', stderr, 'code:', code);
-                reject(new Error(`Parser exited with code ${code}: ${stderr}`));
+                reject(new Error(`${name} exited with code ${code}: ${stderr}`));
                 return;
             }
-            
             try {
-                const result = JSON.parse(stdout);
-                resolve(result);
+                resolve(JSON.parse(stdout));
             } catch (e) {
-                console.error('JSON parse error. stdout:', stdout.substring(0, 500));
-                reject(new Error('Failed to parse parser output'));
+                reject(new Error(`Failed to parse ${name} output`));
             }
         });
     });
+}
+
+function parseTelemetry(inputPath) {
+    const absInputPath = path.isAbsolute(inputPath) ? inputPath : path.resolve(inputPath);
+    return spawnWithTimeout('gps_parser', [absInputPath, '-json'], 60000);
 }
 
 app.post('/api/extract', uploadLarge.single('video'), async (req, res) => {
@@ -109,27 +125,7 @@ app.post('/api/analyze-moov', uploadSmall.single('moov'), async (req, res) => {
         const mp4Buf = Buffer.concat([ftyp, moovData, mdatHeader]);
         fs.writeFileSync(mp4Path, mp4Buf);
 
-        const result = await new Promise((resolve, reject) => {
-            const proc = spawnBin('mp4_offsets', [mp4Path]);
-
-            let stdout = '';
-            let stderr = '';
-
-            proc.stdout.on('data', (data) => { stdout += data.toString(); });
-            proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-            proc.on('close', (code) => {
-                if (code !== 0) {
-                    reject(new Error(`mp4_offsets exited with code ${code}: ${stderr}`));
-                    return;
-                }
-                try {
-                    resolve(JSON.parse(stdout));
-                } catch (e) {
-                    reject(new Error('Failed to parse mp4_offsets output'));
-                }
-            });
-        });
+        const result = await spawnWithTimeout('mp4_offsets', [mp4Path], 30000);
         res.json(result);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -148,27 +144,7 @@ app.post('/api/extract-gpmf', uploadSmall.fields([{ name: 'gpmf_data', maxCount:
     const metaPath = path.resolve(req.files.metadata[0].path);
 
     try {
-        const result = await new Promise((resolve, reject) => {
-            const proc = spawnBin('gps_parser_gpmf', [metaPath, gpmfPath]);
-
-            let stdout = '';
-            let stderr = '';
-
-            proc.stdout.on('data', (data) => { stdout += data.toString(); });
-            proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-            proc.on('close', (code) => {
-                if (code !== 0) {
-                    reject(new Error(`gps_parser_gpmf exited with code ${code}: ${stderr}`));
-                    return;
-                }
-                try {
-                    resolve(JSON.parse(stdout));
-                } catch (e) {
-                    reject(new Error('Failed to parse gps_parser_gpmf output'));
-                }
-            });
-        });
+        const result = await spawnWithTimeout('gps_parser_gpmf', [metaPath, gpmfPath], 30000);
         res.json(result);
     } catch (error) {
         res.status(500).json({ error: error.message });

@@ -1,7 +1,7 @@
 {
-  "name": "gopro-telemetry-app",
-  "version": "0.8.1",
-  "description": "GoPro Telemetry Analyzer",
+  "name": "racelens",
+  "version": "1.0.0",
+  "description": "RaceLens — GoPro Telemetry Analyzer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

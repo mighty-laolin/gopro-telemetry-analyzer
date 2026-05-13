@@ -1,5 +1,44 @@
 # Changelog
 
+## [v1.0.0] - 2026-05-13
+
+### Added
+- Moving marker on track map: yellow circle marker tracks kart position in sync with video playback
+- `mapMarkerIndex` state for sequential GPS point advancement (O(1) per tick vs O(n) linear scan)
+- `findClosestIndex()` binary search helper for efficient seek handling
+- `spawnWithTimeout()` helper in server.js: all C binary spawns now have 30s timeout (60s for fallback parser) and error handling
+- `proc.on('error')` handler on all spawned processes (prevents server crash on missing binary)
+- Undefined guards on `closest.gz` and `closest.gy` in telemetry overlay (GPS5 compatibility)
+
+### Changed
+- Rebranded to **RaceLens** — app title is now "RaceLens" (large, bold, italic) with "GoPro Telemetry Analyzer" as subtitle
+- Page title: "RaceLens — GoPro Telemetry Analyzer"
+- Two-column dashboard layout: charts + lap times on left, video + map on right
+- Full-width dashboard (no max-width constraint)
+- Dynamic chart height sync via `syncChartHeights()` — chart canvases resize to align with video card
+- Map card minimum height set to match video card height
+- Lap times table scrolls internally when content exceeds available space
+- Stats row changed from large cards to compact pill badges with "Telemetry Points" added
+- Track name displayed larger in red (`text-2xl font-extrabold text-red-600`)
+- Chart canvas height dynamically calculated (was fixed 256px)
+- Map zoom increased: `maxZoom: 19`, `maxNativeZoom: 19` on ESRI tile layer
+- Removed section navigation pills bar
+- Removed `#telemetry-msg` banner
+- Removed scroll-related CSS
+- `renderDashboard()`: renamed telemetry variable from `t` to `telem` to avoid shadowing translation function
+- `updateLapResults()` writes into existing `#lap-times-content` div instead of dynamically injecting
+- Telemetry update loop uses sequential advancement + binary search instead of O(n) linear scan
+- Removed dead `alt-display` reference
+- Grid columns use inline `grid-template-columns: 55fr 45fr` with `min-width: 0` on columns and chart containers for responsive shrinking
+- G-force overlay: LONG now correctly shows `gz` (longitudinal), LAT shows `gy` (lateral) — was swapped
+
+### Fixed
+- Lap labels positioned below time axis on initial render
+- TypeError in `renderDashboard()` where `t('stats.unknownTrack')` called telemetry object instead of translation function
+- G-force overlay LONG/LAT values were swapped — LONG showed `gy` (lateral), LAT showed `gz` (longitudinal)
+- Server crash on missing C binary (no `proc.on('error')` handler)
+- Server hang on stalled C binary (no process timeout)
+
 ## [v0.9.4] - 2026-05-12
 
 ### Added
