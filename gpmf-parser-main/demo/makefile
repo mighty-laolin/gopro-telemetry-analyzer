@@ -82,7 +82,7 @@ endif
 
 clean :
 ifeq ($(OS),Windows_NT)
-		del /Q gpmfdemo.exe gps_parser.exe *.o 2>nul
+		del /Q gpmfdemo.exe gps_parser.exe mp4_offsets.exe gps_parser_gpmf.exe *.o 2>nul
 else
 		rm -f gpmfdemo gps_parser mp4_offsets gps_parser_gpmf *_linux *.o
 endif
