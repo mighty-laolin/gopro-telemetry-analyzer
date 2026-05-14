@@ -1999,8 +1999,11 @@ function updateLapResults() {
         function startTelemetryUpdate() {
             if (state.updateInterval) clearInterval(state.updateInterval);
             state.mapMarkerIndex = 0;
+            var video = document.getElementById('video-player');
+            var speedEl = document.getElementById('speed-display');
+            var gzEl = document.getElementById('gz-display');
+            var gyEl = document.getElementById('gy-display');
             state.updateInterval = setInterval(function() {
-                var video = document.getElementById('video-player');
                 if (!video || !state.telemetry || !state.telemetry.data) return;
 
                 var ct = video.currentTime;
@@ -2021,16 +2024,12 @@ function updateLapResults() {
 
                 if (state.mapMarker) state.mapMarker.setLatLng([closest.lat, closest.lon]);
 
-                var speedEl = document.getElementById('speed-display');
-                var gzEl = document.getElementById('gz-display');
-                var gyEl = document.getElementById('gy-display');
-
                 if (speedEl) speedEl.textContent = closest.speed.toFixed(1) + ' km/h';
                 if (closest.gz !== undefined && gzEl) gzEl.textContent = closest.gz.toFixed(2);
                 if (closest.gy !== undefined && gyEl) gyEl.textContent = closest.gy.toFixed(2);
 
-                if (state.speedChart) state.speedChart.update('none');
-                if (state.gforceChart) state.gforceChart.update('none');
+                if (state.speedChart) state.speedChart.draw();
+                if (state.gforceChart) state.gforceChart.draw();
                 
                 updateLapTimer();
             }, 100);
