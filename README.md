@@ -15,9 +15,9 @@ Open http://localhost:3001 — drop a GoPro MP4 file, and you're in.
 
 ## Features
 
-- **Two-column dashboard** — charts + lap times on the left, video + map on the right, everything visible at once
+- **Two-column dashboard** — charts + lap times on the left, video + map on the right, everything visible at once; compact layout optimized for laptop screens
 - **Video with telemetry overlay** — live speed, longitudinal/lateral G-force on top of the video
-- **Speed & G-force charts** — zoom (scroll), pan (drag), click yellow "Lap N" labels to jump to lap start
+- **Speed & G-force charts** — zoom (scroll), pan (drag), click yellow "Lap N" labels to jump to lap start; playhead cursor uses lightweight overlay canvas for smooth performance
 - **Double-click charts to seek** — click any point on the speed or G-force chart to jump the video to that moment
 - **Track map** — ESRI satellite imagery, zoom to level 19; moving marker tracks kart position in sync with video; place S/F line and sector lines by clicking the map
 - **Lap detection** — automatic lap times with best lap highlighted in purple

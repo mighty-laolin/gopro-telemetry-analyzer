@@ -1,6 +1,6 @@
 {
   "name": "racelens",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "RaceLens — GoPro Telemetry Analyzer",
   "main": "server.js",
   "scripts": {
