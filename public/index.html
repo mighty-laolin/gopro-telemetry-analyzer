@@ -29,29 +29,38 @@
     <script>
     (function() {
         // Custom Chart.js plugin for vertical cursor
-        var verticalCursorPlugin = {
-            id: 'verticalCursor',
-            afterDraw: function(chart) {
-                if (typeof state === 'undefined' || state.currentTime === undefined || state.currentTime === null) return;
-                
-                var ctx = chart.ctx;
-                var xAxis = chart.scales.x;
-                var yAxis = chart.scales.y;
-                
-                var x = xAxis.getPixelForValue(state.currentTime);
-                if (x < xAxis.left || x > xAxis.right) return;
-                
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(x, yAxis.top);
-                ctx.lineTo(x, yAxis.bottom);
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#ff0000';
-                ctx.setLineDash([5, 5]);
-                ctx.stroke();
-                ctx.restore();
-            }
-        };
+        function drawPlayheadOnOverlay(chart, overlayCanvas) {
+            if (!chart || !overlayCanvas || state.currentTime === undefined || state.currentTime === null) return;
+            var ctx = overlayCanvas.getContext('2d');
+            var chartArea = chart.chartArea;
+            if (!chartArea) return;
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            var xAxis = chart.scales.x;
+            var yAxis = chart.scales.y;
+            var x = xAxis.getPixelForValue(state.currentTime);
+            if (x < chartArea.left || x > chartArea.right) return;
+            var dpr = window.devicePixelRatio || 1;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x * dpr, chartArea.top * dpr);
+            ctx.lineTo(x * dpr, chartArea.bottom * dpr);
+            ctx.lineWidth = 2 * dpr;
+            ctx.strokeStyle = '#ff0000';
+            ctx.setLineDash([5 * dpr, 5 * dpr]);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function syncOverlayCanvas(chart, overlayCanvas) {
+            if (!chart || !overlayCanvas) return;
+            var canvas = chart.canvas;
+            var rect = canvas.getBoundingClientRect();
+            var dpr = window.devicePixelRatio || 1;
+            overlayCanvas.style.width = rect.width + 'px';
+            overlayCanvas.style.height = rect.height + 'px';
+            overlayCanvas.width = Math.round(rect.width * dpr);
+            overlayCanvas.height = Math.round(rect.height * dpr);
+        }
 
         // Custom Chart.js plugin for lap boundary lines
         var lapLinesPlugin = {
@@ -103,7 +112,6 @@
         };
 
         // Register custom plugins globally
-        Chart.register(verticalCursorPlugin);
         Chart.register(lapLinesPlugin);
         Chart.register(chartZoomPanPlugin);
 
@@ -569,13 +577,13 @@ return smoothed;
                 '<div id="charts-wrapper" class="flex flex-col gap-2">' +
                 '<div id="speed-chart" class="bg-white rounded-lg shadow p-2 relative">' +
                 '<h2 id="speed-chart-title" class="text-base font-semibold mb-1">Speed vs Time</h2>' +
-                '<div id="speed-chart-container" class="relative" style="min-width:0"><canvas id="speed-chart-canvas" class="w-full"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div>' +
+                '<div id="speed-chart-container" class="relative" style="min-width:0"><canvas id="speed-chart-canvas" class="w-full"></canvas><canvas id="speed-overlay-canvas" class="absolute top-0 left-0 w-full h-full" style="pointer-events:none"></canvas><div id="speed-lap-labels" class="absolute pointer-events-none"></div></div>' +
                 '</div>' +
                 '<div id="gforce-chart" class="bg-white rounded-lg shadow p-2 relative">' +
                 '<div class="flex items-center gap-3 mb-1"><h2 id="gforce-chart-title" class="text-base font-semibold">G-Force vs Time</h2>' +
                 '<span style="font-size:12px;display:flex;align-items:center;gap:12px"><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:3px;background:#ef4444;border-radius:1px"></span>' + t('charts.longitudinal') + '</span>' +
                 '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:3px;background:#22c55e;border-radius:1px"></span>' + t('charts.lateral') + '</span></span></div>' +
-                '<div id="gforce-chart-container" class="relative" style="min-width:0"><canvas id="gforce-chart-canvas" class="w-full"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div>' +
+                '<div id="gforce-chart-container" class="relative" style="min-width:0"><canvas id="gforce-chart-canvas" class="w-full"></canvas><canvas id="gforce-overlay-canvas" class="absolute top-0 left-0 w-full h-full" style="pointer-events:none"></canvas><div id="gforce-lap-labels" class="absolute pointer-events-none"></div></div>' +
                 '</div>' +
                 '</div>' +
                 '<div id="lap-times" class="bg-white rounded-lg shadow p-4">' +
@@ -1488,6 +1496,15 @@ function updateLapResults() {
                 var maxContentHeight = rightColMinHeight - leftUsedHeight;
                 lapTimesContent.style.maxHeight = Math.max(100, maxContentHeight) + 'px';
             }
+
+            if (state.speedChart) {
+                var speedOverlay = document.getElementById('speed-overlay-canvas');
+                if (speedOverlay) syncOverlayCanvas(state.speedChart, speedOverlay);
+            }
+            if (state.gforceChart) {
+                var gforceOverlay = document.getElementById('gforce-overlay-canvas');
+                if (gforceOverlay) syncOverlayCanvas(state.gforceChart, gforceOverlay);
+            }
         }
 
         // Chart zoom/pan functions
@@ -1534,6 +1551,9 @@ function updateLapResults() {
             chart.options.scales.x.min = newMinTime;
             chart.options.scales.x.max = newMaxTime;
             chart.update();
+            
+            var overlay = chart.canvas.id === 'speed-chart-canvas' ? document.getElementById('speed-overlay-canvas') : document.getElementById('gforce-overlay-canvas');
+            if (overlay) { syncOverlayCanvas(chart, overlay); drawPlayheadOnOverlay(chart, overlay); }
             
             // Update lap labels
             updateLapLabels();
@@ -1594,6 +1614,9 @@ function updateLapResults() {
             chart.options.scales.x.min = newMinTime;
             chart.options.scales.x.max = newMaxTime;
             chart.update();
+            
+            var overlay = chart.canvas.id === 'speed-chart-canvas' ? document.getElementById('speed-overlay-canvas') : document.getElementById('gforce-overlay-canvas');
+            if (overlay) { syncOverlayCanvas(chart, overlay); drawPlayheadOnOverlay(chart, overlay); }
             
             // Update lap labels
             updateLapLabels();
@@ -2003,6 +2026,10 @@ function updateLapResults() {
             var speedEl = document.getElementById('speed-display');
             var gzEl = document.getElementById('gz-display');
             var gyEl = document.getElementById('gy-display');
+            var speedOverlay = document.getElementById('speed-overlay-canvas');
+            var gforceOverlay = document.getElementById('gforce-overlay-canvas');
+            if (state.speedChart && speedOverlay) syncOverlayCanvas(state.speedChart, speedOverlay);
+            if (state.gforceChart && gforceOverlay) syncOverlayCanvas(state.gforceChart, gforceOverlay);
             state.updateInterval = setInterval(function() {
                 if (!video || !state.telemetry || !state.telemetry.data) return;
 
@@ -2028,8 +2055,8 @@ function updateLapResults() {
                 if (closest.gz !== undefined && gzEl) gzEl.textContent = closest.gz.toFixed(2);
                 if (closest.gy !== undefined && gyEl) gyEl.textContent = closest.gy.toFixed(2);
 
-                if (state.speedChart) state.speedChart.draw();
-                if (state.gforceChart) state.gforceChart.draw();
+                drawPlayheadOnOverlay(state.speedChart, speedOverlay);
+                drawPlayheadOnOverlay(state.gforceChart, gforceOverlay);
                 
                 updateLapTimer();
             }, 100);
@@ -2040,7 +2067,17 @@ function updateLapResults() {
             if (state.speedChart) state.speedChart.resize();
             if (state.gforceChart) state.gforceChart.resize();
             if (state.map) state.map.invalidateSize();
-            setTimeout(function() { updateLapLabels(); }, 100);
+            setTimeout(function() {
+                updateLapLabels();
+                if (state.speedChart) {
+                    var so = document.getElementById('speed-overlay-canvas');
+                    if (so) { syncOverlayCanvas(state.speedChart, so); drawPlayheadOnOverlay(state.speedChart, so); }
+                }
+                if (state.gforceChart) {
+                    var go = document.getElementById('gforce-overlay-canvas');
+                    if (go) { syncOverlayCanvas(state.gforceChart, go); drawPlayheadOnOverlay(state.gforceChart, go); }
+                }
+            }, 100);
         });
 
         // Start
